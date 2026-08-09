@@ -1,5 +1,5 @@
 name: humlit-skills
-version: 1.0.0
+version: 1.0.1
 description: >
   Router manifest for the static/fragment split. SKILL.md（router）据此决定
   按需 Read 哪些 fragment。非运行时解析，供 Agent 与人工参考。

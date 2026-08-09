@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from core.formatter import generate_reference_list
 from core.paths import state_path
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 CITATION_STYLE_CHOICES = ["gbt7714", "gb", "apa", "mla", "chicago", "footnote"]
 SESSION_SCHEMA_VERSION = 1

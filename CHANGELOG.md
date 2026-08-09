@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.1
+
+### macOS Desktop Detection
+
+- Use one shared list of standard macOS Edge/Chrome application paths for
+  environment checks and the CNKI browser driver.
+- Preserve PATH-based browser detection for Homebrew and custom installations.
+- Keep CNKI unavailable when the browser exists but no compatible driver is
+  ready, instead of reporting a false-positive desktop capability.
+
+### Verification
+
+- Add regression coverage for standard application paths and PATH fallback.
+- Re-run the full test suite, offline end-to-end smoke, live API canary, release
+  verifier, and wheel installation checks.
+
 ## 1.0.0
 
 ### Standalone Project Identity

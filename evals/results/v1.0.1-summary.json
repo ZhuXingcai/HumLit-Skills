@@ -1,0 +1,14 @@
+{
+  "version": "1.0.1",
+  "evaluation_type": "LLM semantic self-review",
+  "independent_evaluator": false,
+  "cases": 23,
+  "trigger_accuracy": 1.0,
+  "fragment_accuracy": 1.0,
+  "command_or_clarification_accuracy": 1.0,
+  "artifact": "v1.0.0-semantic.jsonl",
+  "capability_contract": "../capability-contract.json",
+  "offline_smoke": "../../scripts/smoke_test.py --mode offline",
+  "e2e_smoke_artifact": "v1.0.1-e2e-smoke.json",
+  "note": "The 1.0.1 patch changes only macOS browser detection; routing rules are unchanged. The semantic artifact remains self-review evidence, not an independent model evaluation."
+}

@@ -1,5 +1,5 @@
 """
-literature.py - HumLit Skills 统一 CLI 入口 (v1.0.0)
+literature.py - HumLit Skills 统一 CLI 入口 (v1.0.1)
 用法:
   python literature.py search "关键词" [--project 课题名] [--source cnki|openalex|semantic|arxiv|nssd|dblp|api|all] [--doc-type master] [--field 摘要] [--author] [--journal] [--download] ...
   python literature.py batch-search "词1" "词2" ... [--project 课题名] [--query-file kw.txt] [--core CSSCI] [--doc-type master] [--field 摘要] [--author] [--journal] [--append]

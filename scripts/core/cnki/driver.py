@@ -27,6 +27,14 @@ if HAS_SELENIUM:
 
 # ── 浏览器检测与创建 ─────────────────────────────────
 
+MACOS_BROWSER_EXECUTABLES = (
+    ("edge", Path("/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge")),
+    ("chrome", Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")),
+    ("chrome", Path("/Applications/Chromium.app/Contents/MacOS/Chromium")),
+    ("chrome", Path.home() / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+)
+
+
 def _detect_browser() -> str:
     """检测可用浏览器，优先 Edge。支持 HUMLIT_BROWSER / config.json 强制指定。"""
     try:
@@ -50,6 +58,14 @@ def _detect_browser() -> str:
             if os.path.exists(p):
                 return "edge"
         if shutil.which("chrome") or shutil.which("google-chrome"):
+            return "chrome"
+    elif sys.platform == "darwin":
+        for browser, executable in MACOS_BROWSER_EXECUTABLES:
+            if executable.exists():
+                return browser
+        if shutil.which("microsoft-edge") or shutil.which("microsoft-edge-stable"):
+            return "edge"
+        if shutil.which("google-chrome") or shutil.which("chromium") or shutil.which("chromium-browser"):
             return "chrome"
     else:
         if shutil.which("microsoft-edge") or shutil.which("microsoft-edge-stable"):

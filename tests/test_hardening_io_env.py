@@ -2,7 +2,6 @@ import argparse
 import builtins
 import io
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -104,20 +103,22 @@ def test_check_fix_does_not_run_pip_install(monkeypatch, tmp_path):
     assert "fixes_applied" not in result
 
 
-def test_macos_browser_detection_checks_standard_application_paths(monkeypatch):
-    chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+def test_macos_browser_detection_is_shared_by_check_and_driver(
+    monkeypatch, tmp_path
+):
+    from core import config
+    from core.cnki import driver
+
+    chrome = tmp_path / "Google Chrome"
+    chrome.write_text("", encoding="utf-8")
     monkeypatch.setattr(env_cmd.sys, "platform", "darwin")
     monkeypatch.setattr(shutil, "which", lambda _: None)
     monkeypatch.setattr(
-        os.path,
-        "exists",
-        lambda path: str(path) == chrome,
+        driver,
+        "MACOS_BROWSER_EXECUTABLES",
+        (("chrome", chrome),),
     )
-    monkeypatch.setattr(
-        Path,
-        "is_file",
-        lambda self: str(self) == chrome,
-    )
+    monkeypatch.setattr(config, "get", lambda *_args, **_kwargs: "auto")
     runner = SimpleNamespace(
         run=lambda *args, **kwargs: SimpleNamespace(
             returncode=0,
@@ -125,6 +126,31 @@ def test_macos_browser_detection_checks_standard_application_paths(monkeypatch):
         )
     )
 
+    assert driver._detect_browser() == "chrome"
+    assert env_cmd._check_browser(runner) == (True, "Google Chrome 130")
+
+
+def test_macos_browser_detection_falls_back_to_path(monkeypatch):
+    from core import config
+    from core.cnki import driver
+
+    chrome = "/opt/homebrew/bin/google-chrome"
+    monkeypatch.setattr(env_cmd.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        shutil,
+        "which",
+        lambda command: chrome if command == "google-chrome" else None,
+    )
+    monkeypatch.setattr(driver, "MACOS_BROWSER_EXECUTABLES", ())
+    monkeypatch.setattr(config, "get", lambda *_args, **_kwargs: "auto")
+    runner = SimpleNamespace(
+        run=lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="Google Chrome 130\n",
+        )
+    )
+
+    assert driver._detect_browser() == "chrome"
     assert env_cmd._check_browser(runner) == (True, "Google Chrome 130")
 
 

@@ -32,14 +32,10 @@ def _check_browser(subprocess_mod) -> tuple:
             return True, f"Chrome ({_chrome})"
     else:
         if sys.platform == "darwin":
-            macos_candidates = [
-                "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                "/Applications/Chromium.app/Contents/MacOS/Chromium",
-                str(Path.home() / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
-            ]
-            for executable in macos_candidates:
-                if not os.path.exists(executable):
+            from core.cnki.driver import MACOS_BROWSER_EXECUTABLES
+            for _browser, executable_path in MACOS_BROWSER_EXECUTABLES:
+                executable = str(executable_path)
+                if not executable_path.exists():
                     continue
                 try:
                     result = subprocess_mod.run(

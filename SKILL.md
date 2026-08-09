@@ -18,7 +18,7 @@ description: >-
   general office-document editing, code documentation lookup, translation alone,
   plagiarism-percentage detection, or official acceptance/degree decisions.
 metadata:
-  version: 1.0.0
+  version: 1.0.1
   compatibility:
     platform: any
     python: ">=3.9"

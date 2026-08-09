@@ -22,7 +22,7 @@ def test_release_identity_contract_is_humlit():
 def test_independent_routing_gate_rejects_self_review_artifact():
     with pytest.raises(AssertionError, match="independent"):
         verify_release.verify_routing_evaluation(
-            "1.0.0",
+            "1.0.1",
             require_independent=True,
         )
 
@@ -69,5 +69,5 @@ def test_ci_matrix_covers_supported_operating_systems_and_core_checks():
     assert "python -m pip install --no-deps ." in workflow
     assert "run: humlit --version" in workflow
     assert "python -m pytest -q" in workflow
-    assert "python scripts/verify_release.py --version 1.0.0" in workflow
+    assert "python scripts/verify_release.py --version 1.0.1" in workflow
     assert "python scripts/smoke_test.py --mode offline" in workflow

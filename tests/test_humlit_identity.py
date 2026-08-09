@@ -46,5 +46,5 @@ def test_humlit_console_identity(monkeypatch, capsys):
 
     captured = capsys.readouterr()
     assert exc.value.code == 0
-    assert captured.out.strip() == "humlit 1.0.0"
+    assert captured.out.strip() == "humlit 1.0.1"
     assert captured.err == ""
