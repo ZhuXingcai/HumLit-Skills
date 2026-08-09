@@ -143,3 +143,83 @@ def test_cnki_result_row_dom_contract_fixture():
     assert paper["year"] == 2024
     assert paper["cited_by"] == 17
     assert paper["core_type"] == "CSSCI"
+
+
+def test_cnki_unreachable_stops_before_browser_start(monkeypatch):
+    monkeypatch.setattr(
+        cnki_search,
+        "check_cnki_access",
+        lambda: (False, "知网不可访问: connection refused"),
+    )
+    monkeypatch.setattr(
+        cnki_search,
+        "_detect_browser",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("browser must not start when CNKI is unreachable")
+        ),
+    )
+
+    result = cnki_search.search_cnki("数字人文")
+
+    assert result == [{
+        "status": "error",
+        "code": "CNKI_UNREACHABLE",
+        "message": "知网不可访问: connection refused",
+    }]
+
+
+def test_cnki_empty_query_validates_before_external_checks(monkeypatch):
+    calls = []
+
+    def check_access():
+        calls.append("network")
+        return True, "知网可访问"
+
+    def detect_browser():
+        calls.append("browser")
+        return "chrome"
+
+    monkeypatch.setattr(cnki_search, "check_cnki_access", check_access)
+    monkeypatch.setattr(cnki_search, "_detect_browser", detect_browser)
+    monkeypatch.setattr(
+        cnki_search,
+        "_create_driver",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("driver must not start for an empty query")
+        ),
+    )
+
+    result = cnki_search.search_cnki("")
+
+    assert result == [{
+        "status": "error",
+        "code": "NO_KEYWORDS",
+        "message": "未提供搜索关键词",
+    }]
+    assert calls == []
+
+
+def test_cnki_driver_provision_failure_is_structured(monkeypatch):
+    from core.cnki.driver import DriverStartupError
+
+    monkeypatch.setattr(
+        cnki_search,
+        "check_cnki_access",
+        lambda: (True, "知网可访问"),
+    )
+    monkeypatch.setattr(cnki_search, "_detect_browser", lambda: "chrome")
+    monkeypatch.setattr(
+        cnki_search,
+        "_create_driver",
+        lambda **kwargs: (_ for _ in ()).throw(
+            DriverStartupError("DRIVER_MISSING", "driver provisioning failed")
+        ),
+    )
+
+    result = cnki_search.search_cnki("数字人文")
+
+    assert result == [{
+        "status": "error",
+        "code": "DRIVER_MISSING",
+        "message": "driver provisioning failed",
+    }]

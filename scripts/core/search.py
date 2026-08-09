@@ -1303,9 +1303,13 @@ def get_citations(paper_id: str, direction: str = "both",
                 "paper": {}, "citing": [], "references": []}
 
     fields = "title,authors,year,citationCount,externalIds,url"
+    headers = _semantic_scholar_headers()
     paper_data = _http_get(
         f"https://api.semanticscholar.org/graph/v1/paper/{s2_id}",
         params={"fields": fields},
+        headers=headers,
+        source="semantic_scholar",
+        raise_on_error=True,
     )
     if paper_data and isinstance(paper_data, dict) and "title" in paper_data:
         ext = paper_data.get("externalIds") or {}
@@ -1323,6 +1327,9 @@ def get_citations(paper_id: str, direction: str = "both",
         citing = _http_get(
             f"https://api.semanticscholar.org/graph/v1/paper/{s2_id}/citations",
             params={"fields": fields, "limit": min(limit, 100)},
+            headers=headers,
+            source="semantic_scholar",
+            raise_on_error=True,
         )
         if citing and isinstance(citing, dict):
             for item in (citing.get("data") or []):
@@ -1345,6 +1352,9 @@ def get_citations(paper_id: str, direction: str = "both",
         refs = _http_get(
             f"https://api.semanticscholar.org/graph/v1/paper/{s2_id}/references",
             params={"fields": fields, "limit": min(limit, 100)},
+            headers=headers,
+            source="semantic_scholar",
+            raise_on_error=True,
         )
         if refs and isinstance(refs, dict):
             for item in (refs.get("data") or []):

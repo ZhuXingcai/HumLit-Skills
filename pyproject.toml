@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "humlit-skills"
-version = "1.0.1"
+version = "1.0.2"
 description = "Auditable literature research skills for humanities and social sciences"
 readme = "README.md"
 license = "MIT"
@@ -55,6 +55,10 @@ include = ["cli*", "core*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+  "live: opt-in tests that call maintained public scholarly services",
+  "cnki: opt-in tests that require CNKI network or desktop prerequisites",
+]
 
 [tool.coverage.run]
 source = ["scripts"]

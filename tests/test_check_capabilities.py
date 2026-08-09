@@ -19,7 +19,16 @@ def run_check(monkeypatch, tmp_path, *, driver_ok=False, cnki_ok=True):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("CODEX_SANDBOX_NETWORK_DISABLED", "1")
     monkeypatch.setattr(env_cmd, "_check_browser", lambda _subprocess: (True, "Edge"))
-    monkeypatch.setattr(env_cmd, "_check_driver", lambda: (driver_ok, "driver missing"))
+    monkeypatch.setattr(
+        env_cmd,
+        "_check_driver",
+        lambda: (
+            driver_ok,
+            "Selenium Manager 已就绪；首次知网操作将按需获取匹配的 chromedriver"
+            if driver_ok
+            else "driver missing",
+        ),
+    )
     monkeypatch.setattr(env_cmd, "_check_cnki", lambda: (cnki_ok, "accessible" if cnki_ok else "blocked"))
     monkeypatch.setattr(env_cmd, "_check_update", lambda: None)
 
@@ -50,7 +59,9 @@ def test_check_distinguishes_connector_readiness_from_runtime_verification(monke
     assert sources["openalex"]["availability_scope"] == "local_connector_only"
 
     assert sources["cnki"]["maturity"] == "conditional_desktop"
-    assert sources["cnki"]["runtime_verified"] is True
+    assert sources["cnki"]["runtime_verified"] is None
+    assert sources["cnki"]["availability_scope"] == "local_prerequisites_only"
+    assert sources["cnki"]["driver_mode"] == "selenium_manager_on_demand"
 
     assert sources["base"]["maturity"] == "experimental"
     assert sources["base"]["available"] is False

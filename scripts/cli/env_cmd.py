@@ -71,10 +71,12 @@ def _check_driver() -> tuple:
     except Exception as e:
         return False, f"无法检测浏览器类型: {e}"
 
+    manager_available = False
     try:
         from selenium.webdriver.common.selenium_manager import SeleniumManager
         sm_bin = SeleniumManager._get_binary()
         if sm_bin and os.path.isfile(str(sm_bin)):
+            manager_available = True
             import subprocess as _sp
             browser_arg = "MicrosoftEdge" if browser == "edge" else "chrome"
             result = _sp.run(
@@ -97,9 +99,13 @@ def _check_driver() -> tuple:
         return True, f"本地驱动: {local}"
 
     driver_name = "msedgedriver" if browser == "edge" else "chromedriver"
+    if manager_available:
+        return True, (
+            f"Selenium Manager 已就绪；首次知网操作将按需获取匹配的 {driver_name}"
+        )
     return False, (
-        f"未找到 {driver_name}（Selenium Manager 需联网下载）。"
-        f"解决：1) 提权获取网络权限 2) 设置 HUMLIT_DRIVER_PATH 环境变量"
+        f"未找到 {driver_name}，且 Selenium Manager 不可用。"
+        f"解决：安装锁定的 selenium 依赖，或设置 HUMLIT_DRIVER_PATH"
     )
 
 
@@ -490,6 +496,13 @@ def cmd_check(args):
     })
 
     driver_ok, driver_detail = _check_driver()
+    driver_mode = (
+        "selenium_manager_on_demand"
+        if "按需获取" in driver_detail
+        else "cached_or_explicit"
+        if driver_ok
+        else None
+    )
     checks.append({
         "item": "浏览器驱动",
         "status": "ok" if driver_ok else "warn",
@@ -546,6 +559,7 @@ def cmd_check(args):
         "cnki_feasible": cnki_feasible,
         "sandbox_blocked": sandbox_blocked,
         "driver_ok": driver_ok,
+        "driver_mode": driver_mode,
         "api_connectors_available": True,
         "api_sources_runtime_verified": None,
         "docx_tools": any(c["item"] == "python-docx" and c["status"] == "ok" for c in checks),
@@ -557,8 +571,9 @@ def cmd_check(args):
                 "available": cnki_feasible,
                 "maturity": "conditional_desktop",
                 "connector_available": selenium_ok,
-                "runtime_verified": cnki_feasible,
-                "availability_scope": "desktop_browser_and_access_check",
+                "runtime_verified": None,
+                "availability_scope": "local_prerequisites_only",
+                "driver_mode": driver_mode,
                 "features": ["search", "download", "fulltext", "master_thesis", "doctor_thesis", "core_journals"],
                 "limitations": ["requires_vpn", "rate_limited", "chinese_only"],
                 "recommended_for": ["中文文献", "学位论文", "核心期刊筛选"]

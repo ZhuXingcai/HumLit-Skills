@@ -154,6 +154,68 @@ def test_macos_browser_detection_falls_back_to_path(monkeypatch):
     assert env_cmd._check_browser(runner) == (True, "Google Chrome 130")
 
 
+def test_cnki_network_check_can_be_explicitly_skipped(monkeypatch):
+    import urllib.request
+
+    from core.cnki import driver
+
+    monkeypatch.setenv("HUMLIT_SKIP_NETWORK_CHECK", "1")
+    monkeypatch.setattr(
+        urllib.request,
+        "build_opener",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("network must not run when the precheck is skipped")
+        ),
+    )
+
+    assert driver.check_cnki_access() == (True, "已跳过网络预检")
+
+
+def test_cnki_driver_prefers_explicit_path(monkeypatch, tmp_path):
+    from core.cnki import driver
+
+    executable = tmp_path / "chromedriver"
+    executable.write_text("", encoding="utf-8")
+    monkeypatch.setenv("HUMLIT_DRIVER_PATH", str(executable))
+
+    assert driver._find_local_driver("chrome") == str(executable)
+
+
+def test_driver_check_accepts_selenium_manager_on_demand(
+    monkeypatch, tmp_path
+):
+    from selenium.webdriver.common.selenium_manager import SeleniumManager
+
+    from core.cnki import driver
+
+    manager = tmp_path / "selenium-manager"
+    manager.write_text("", encoding="utf-8")
+    monkeypatch.setattr(driver, "_detect_browser", lambda: "chrome")
+    monkeypatch.setattr(driver, "_find_local_driver", lambda browser: None)
+    monkeypatch.setattr(SeleniumManager, "_get_binary", lambda: manager)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps({
+                "result": {
+                    "code": 0,
+                    "driver_path": "",
+                    "browser_path": "",
+                }
+            }),
+            stderr="",
+        ),
+    )
+
+    ok, detail = env_cmd._check_driver()
+
+    assert ok is True
+    assert "Selenium Manager 已就绪" in detail
+    assert "按需获取" in detail
+
+
 def test_cnki_url_validation_rejects_hostname_confusion(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(

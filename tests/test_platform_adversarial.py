@@ -85,7 +85,7 @@ def test_installed_entrypoint_works_outside_checkout(tmp_path):
 
     result, stdout, stderr = _run_cli("--version", cwd=cwd)
     assert result.returncode == 0, stderr
-    assert stdout.strip() == "humlit 1.0.1"
+    assert stdout.strip() == "humlit 1.0.2"
     assert stderr == ""
     assert shutil.which(removed_entrypoint) is None
 

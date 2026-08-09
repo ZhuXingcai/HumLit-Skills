@@ -536,7 +536,11 @@ def cmd_citations(args):
     print(f"[citations] 查询 {paper_id} 的引文网络（方向: {direction}）...",
           file=sys.stderr)
 
-    result = get_citations(paper_id, direction=direction, limit=limit)
+    try:
+        result = get_citations(paper_id, direction=direction, limit=limit)
+    except SearchSourceError as exc:
+        _output(_enhance_error(exc.as_dict(), {"paper_id": paper_id}))
+        return
 
     if "error" in result:
         _output({"status": "error", "code": "RESOLVE_FAILED",

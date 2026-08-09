@@ -21,7 +21,7 @@ if HAS_SELENIUM:
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.common.exceptions import (
-        TimeoutException, NoSuchElementException,
+        TimeoutException, NoSuchElementException, NoSuchDriverException,
     )
 
 
@@ -33,6 +33,15 @@ MACOS_BROWSER_EXECUTABLES = (
     ("chrome", Path("/Applications/Chromium.app/Contents/MacOS/Chromium")),
     ("chrome", Path.home() / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
 )
+
+
+class DriverStartupError(RuntimeError):
+    """Structured browser startup failure exposed to CNKI command handlers."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
 
 
 def _detect_browser() -> str:
@@ -589,7 +598,10 @@ def _find_local_driver(browser: str) -> Optional[str]:
     except Exception as e:
         _log(f"[cnki] selenium-manager 查找失败: {e}")
 
-    _log(f"[cnki] 未找到本地 {driver_name}")
+    _log(
+        f"[cnki] 未找到已缓存的 {driver_name}；"
+        "网络可用时 Selenium Manager 将在启动时按需获取"
+    )
     return None
 
 
@@ -692,6 +704,12 @@ def _create_driver(browser: str = None, headless: bool = False) -> "webdriver.Re
                 _log(f"[cnki] 连接已有浏览器失败: {e}")
 
     if driver is None:
+        first_error_text = str(first_err or "")
+        driver_missing = (
+            HAS_SELENIUM
+            and isinstance(first_err, NoSuchDriverException)
+        ) or "Unable to obtain driver" in first_error_text
+        error_code = "DRIVER_MISSING" if driver_missing else "CNKI_SEARCH_FAILED"
         err_msg = (
             f"无法创建浏览器实例（{browser}）: {first_err}\n\n"
             f"【诊断】所有启动方式均失败（直接启动 / 本地驱动 / 沙盒外启动）。\n\n"
@@ -701,7 +719,7 @@ def _create_driver(browser: str = None, headless: bool = False) -> "webdriver.Re
             f"2. 手动指定驱动路径：设置环境变量 HUMLIT_DRIVER_PATH=/path/to/driver\n"
             f"3. 确认网络可用后：pip install selenium>=4.10 会自动管理驱动"
         )
-        raise RuntimeError(err_msg)
+        raise DriverStartupError(error_code, err_msg)
 
     no_stealth = (
         get_env(

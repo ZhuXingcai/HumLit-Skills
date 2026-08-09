@@ -14,6 +14,7 @@ from .constants import (
 from .driver import (
     _detect_browser, _create_driver, _load_cookies, _save_cookies,
     _handle_captcha, check_cnki_access,
+    DriverStartupError,
 )
 
 if HAS_SELENIUM:
@@ -96,6 +97,13 @@ def search_cnki(
     """
     _log(f"[cnki] 开始搜索: keyword={keyword}, core={core}, "
          f"year_from={year_from}, doc_type={doc_type}, field={field}")
+    if not str(keyword or "").strip() and not author and not journal:
+        return [{
+            "status": "error",
+            "code": "NO_KEYWORDS",
+            "message": "未提供搜索关键词",
+        }]
+
     accessible, msg = check_cnki_access()
     _log(f"[cnki] 网络检测: accessible={accessible}, msg={msg}")
     if not accessible:
@@ -217,6 +225,8 @@ def search_cnki(
             return all_results, driver
         return all_results
 
+    except DriverStartupError as e:
+        return [{"status": "error", "code": e.code, "message": e.message}]
     except Exception as e:
         return [{"status": "error", "code": "CNKI_SEARCH_FAILED",
                  "message": str(e)}]

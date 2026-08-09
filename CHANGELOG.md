@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.0.2
+
+### CNKI First-Run Readiness
+
+- Treat an available Selenium Manager as an on-demand driver provider instead
+  of rejecting a clean machine because ChromeDriver is not cached yet.
+- Preserve side-effect-free environment checks: the matching driver is
+  downloaded only when a real CNKI browser operation starts.
+- Return `DRIVER_MISSING` when Selenium Manager cannot provision a driver, and
+  validate empty CNKI queries before network or browser startup.
+
+### Live API Reliability
+
+- Send the configured Semantic Scholar API key on citation-network requests.
+- Propagate rate limits and source failures instead of returning an empty
+  citation graph as a partial success.
+- Add opt-in pytest canaries for maintained public APIs and real CNKI network
+  and desktop search.
+
+### Verification
+
+- Verify clean-cache ChromeDriver provisioning against Chrome 151 on macOS.
+- Complete a real CNKI desktop search and retain deterministic regression
+  coverage for preflight, error classification, and empty-input behavior.
+
 ## 1.0.1
 
 ### macOS Desktop Detection

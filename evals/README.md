@@ -64,9 +64,9 @@ python scripts/evaluate_routing.py verify \
   --request evals/results/routing-evaluation-request.json \
   --results /path/to/external-results.jsonl \
   --provider <provider> --model <model> --run-id <external-run-id> \
-  --output evals/results/v1.0.1-independent-summary.json
+  --output evals/results/v1.0.2-independent-summary.json
 
-python scripts/verify_release.py --version 1.0.1 \
+python scripts/verify_release.py --version 1.0.2 \
   --require-independent-routing-eval
 ```
 

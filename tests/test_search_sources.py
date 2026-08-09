@@ -349,3 +349,118 @@ def test_rate_limit_fails_fast_without_hidden_backoff(monkeypatch):
     assert raised.value.status_code == 429
     assert slept == []
     assert time.monotonic() - started < 1
+
+
+def test_http_post_form_rejects_non_object_json(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return ["unexpected"]
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def post(self, *args, **kwargs):
+            return Response()
+
+    monkeypatch.setattr(search.httpx, "Client", Client)
+
+    with pytest.raises(search.SearchSourceError) as raised:
+        search._http_post_form(
+            "https://example.test",
+            {"query": "digital humanities"},
+            source="nssd",
+        )
+
+    assert raised.value.code == "SOURCE_SCHEMA_ERROR"
+    assert raised.value.source == "nssd"
+
+
+def test_citations_propagate_rate_limit_with_configured_api_key(monkeypatch):
+    observed = []
+
+    def rate_limited(
+        url,
+        params=None,
+        headers=None,
+        *,
+        source="http",
+        raise_on_error=False,
+    ):
+        observed.append({
+            "url": url,
+            "headers": headers,
+            "source": source,
+            "raise_on_error": raise_on_error,
+        })
+        if raise_on_error:
+            raise search.SearchSourceError(
+                source,
+                "API_RATE_LIMIT",
+                "Semantic Scholar HTTP 429",
+                status_code=429,
+            )
+        return None
+
+    monkeypatch.setattr(search, "_cache_get", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        search,
+        "_semantic_scholar_headers",
+        lambda: {"x-api-key": "test-key"},
+    )
+    monkeypatch.setattr(search, "_http_get", rate_limited)
+    monkeypatch.setattr(search.time, "sleep", lambda _: None)
+
+    with pytest.raises(search.SearchSourceError) as raised:
+        search.get_citations("10.1038/sdata.2016.18", limit=1)
+
+    assert raised.value.code == "API_RATE_LIMIT"
+    assert observed == [{
+        "url": (
+            "https://api.semanticscholar.org/graph/v1/paper/"
+            "DOI:10.1038/sdata.2016.18"
+        ),
+        "headers": {"x-api-key": "test-key"},
+        "source": "semantic_scholar",
+        "raise_on_error": True,
+    }]
+
+
+def test_citations_cli_preserves_source_error(monkeypatch):
+    monkeypatch.setattr(
+        search_cmd,
+        "get_citations",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            search.SearchSourceError(
+                "semantic_scholar",
+                "API_RATE_LIMIT",
+                "Semantic Scholar HTTP 429",
+                status_code=429,
+            )
+        ),
+    )
+    stdout = io.StringIO()
+
+    with contextlib.redirect_stdout(stdout):
+        search_cmd.cmd_citations(
+            argparse.Namespace(
+                paper_id="10.1038/sdata.2016.18",
+                direction="both",
+                limit=1,
+            )
+        )
+
+    result = json.loads(stdout.getvalue())
+    assert result["status"] == "error"
+    assert result["code"] == "API_RATE_LIMIT"
+    assert result["source"] == "semantic_scholar"
+    assert result["http_status"] == 429
