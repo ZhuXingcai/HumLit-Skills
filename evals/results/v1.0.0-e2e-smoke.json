@@ -1,0 +1,75 @@
+{
+  "version": "1.0.0",
+  "observed_at": "2026-08-09",
+  "offline": {
+    "status": "success",
+    "checks_passed": 5,
+    "checks_failed": 0,
+    "chains": [
+      "research_library",
+      "document_io",
+      "format_and_review",
+      "humanities_tools",
+      "workflow_routing"
+    ],
+    "runtime_only_environment": {
+      "locked_dependencies": true,
+      "pip_check": "success",
+      "beautifulsoup4_installed": false,
+      "pypdf_installed": true
+    }
+  },
+  "live": {
+    "openalex": {
+      "status": "success",
+      "evidence": "Titled search result returned"
+    },
+    "semantic_scholar": {
+      "status": "conditional",
+      "evidence": "Returned a titled result in one probe and HTTP 429 in later probes",
+      "degradation": "Fails fast with API_RATE_LIMIT; explicit fallback reached OpenAlex",
+      "configuration": "SEMANTIC_SCHOLAR_API_KEY supported"
+    },
+    "arxiv": {
+      "status": "success",
+      "evidence": "Titled search result returned"
+    },
+    "nssd": {
+      "status": "success",
+      "evidence": "Current ncpssd.cn JSON form endpoint returned a titled Chinese record"
+    },
+    "dblp": {
+      "status": "conditional",
+      "evidence": "Succeeded in aggregate search and had one later transient SOURCE_UNAVAILABLE probe"
+    },
+    "oa_doi_download": {
+      "status": "success",
+      "doi": "10.1038/sdata.2016.18",
+      "method": "openalex_oa",
+      "bytes": 254899,
+      "pdf_signature_verified": true
+    },
+    "citation_network": {
+      "status": "success",
+      "evidence": "Known DOI returned both citing and reference records"
+    },
+    "base": {
+      "status": "experimental",
+      "evidence": "Earlier live probe timed out; excluded from aggregates and release gate"
+    },
+    "cnki": {
+      "status": "not_verified",
+      "reason": "Current environment lacks a verified desktop browser/driver/institutional-access chain",
+      "release_claim": "Conditional desktop capability only"
+    }
+  },
+  "test_suite": {
+    "passed": 282,
+    "failed": 0
+  },
+  "release_verifier": {
+    "commands": 39,
+    "capabilities": 17,
+    "routing_cases": 23
+  }
+}

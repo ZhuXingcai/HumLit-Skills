@@ -1,0 +1,23 @@
+{"id":"search-cnki","trigger":true,"task":"search","fragment":"static/fragments/task/search.md","command":"search","clarify":false,"reason":"明确要求检索 CSSCI 学术论文，应触发 CNKI 条件搜索路由。"}
+{"id":"download-fulltext","trigger":true,"task":"download","fragment":"static/fragments/task/download.md","command":"batch-download","clarify":false,"reason":"明确引用已有结果序号并要求下载知网全文。"}
+{"id":"write-review","trigger":true,"task":"review-write","fragment":"static/fragments/task/review-write.md","command":"review","clarify":false,"reason":"要求基于当前文献库生成可追溯综述材料；最终成稿仍需 Agent 核对。"}
+{"id":"citation","trigger":true,"task":"citation","fragment":"static/fragments/task/citation.md","command":"cite","clarify":false,"reason":"要求按 GB/T 7714 生成引用。"}
+{"id":"word","trigger":true,"task":"docx","fragment":"static/fragments/task/docx.md","command":"write-docx","clarify":false,"reason":"要求把 Markdown 学术稿转换为 Word。"}
+{"id":"format","trigger":true,"task":"format","fragment":"static/fragments/task/format.md","command":"format-check","clarify":false,"reason":"要求检测学位论文版式与标题结构。"}
+{"id":"blind-review","trigger":true,"task":"blind-review","fragment":"static/fragments/task/blind-review.md","command":"review-signals","clarify":false,"reason":"要求进行有边界的送审前盲审模拟。"}
+{"id":"historical-source","trigger":true,"task":"source-citation","fragment":"static/fragments/task/source-citation.md","command":"cite-source","clarify":false,"reason":"地方志和档案属于史料引用场景。"}
+{"id":"polish","trigger":true,"task":"polish","fragment":"static/fragments/task/polish.md","command":"polish-signals","clarify":false,"reason":"要求诊断中文学术表达。"}
+{"id":"journal","trigger":true,"task":"journal-fit","fragment":"static/fragments/task/journal-fit.md","command":"journal-check","clarify":false,"reason":"要求检查 C 刊匿名稿身份泄露。"}
+{"id":"qualitative","trigger":true,"task":"qual-coding","fragment":"static/fragments/task/qual-coding.md","command":"qual-code","clarify":false,"reason":"明确提供编码簿并要求确定性编码与共现统计。"}
+{"id":"theory","trigger":true,"task":"theory-framework","fragment":"static/fragments/task/theory-framework.md","command":"theory-match","clarify":false,"reason":"要求依据研究关键词检索理论候选；适配度由研究者核验。"}
+{"id":"download-oa-doi","trigger":true,"task":"download","fragment":"static/fragments/task/download.md","command":"download","clarify":false,"reason":"提供 DOI 并要求下载合法 OA PDF。"}
+{"id":"pdf-metadata","trigger":true,"task":"docx","fragment":"static/fragments/task/docx.md","command":"pdf-meta","clarify":false,"reason":"目标是提取学术 PDF 的书目元数据。"}
+{"id":"qualitative-open-coding","trigger":true,"task":"qual-coding","fragment":"static/fragments/task/qual-coding.md","command":"qual-codebook-template","clarify":true,"reason":"学术质性编码应触发，但脚本只提供编码簿与确定性命中底稿，开放编码和主题归纳需 Agent/研究者完成。"}
+{"id":"negative-web","trigger":false,"task":null,"fragment":null,"command":null,"clarify":false,"reason":"天气属于通用实时网页信息，不是学术研究任务。"}
+{"id":"negative-code","trigger":false,"task":null,"fragment":null,"command":null,"clarify":false,"reason":"代码文档查询被 Skill 边界明确排除。"}
+{"id":"negative-translation","trigger":false,"task":null,"fragment":null,"command":null,"clarify":false,"reason":"无学术需求的日常翻译被 Skill 边界明确排除。"}
+{"id":"negative-general-docx","trigger":false,"task":null,"fragment":null,"command":null,"clarify":false,"reason":"普通会议通知的 Word 排版应由通用文档工具处理。"}
+{"id":"negative-general-pdf","trigger":false,"task":null,"fragment":null,"command":null,"clarify":false,"reason":"非学术合同 PDF 提取不属于 HumLit Skills。"}
+{"id":"negative-plagiarism-score","trigger":false,"task":null,"fragment":null,"command":null,"clarify":false,"reason":"Skill 不具备知网查重百分比检测或保证降重率的能力。"}
+{"id":"negative-official-decision","trigger":false,"task":null,"fragment":null,"command":null,"clarify":false,"reason":"Skill 不能提供官方录用结论或准确录用概率。"}
+{"id":"negative-current-news","trigger":false,"task":null,"fragment":null,"command":null,"clarify":false,"reason":"实时科技新闻是通用网页搜索，不是学术数据库检索。"}

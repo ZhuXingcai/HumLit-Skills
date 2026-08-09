@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "id": "https://openalex.org/W1",
+      "title": "Digital Humanities in Local Gazetteers",
+      "publication_year": 2024,
+      "doi": "https://doi.org/10.1000/openalex",
+      "cited_by_count": 12,
+      "authorships": [
+        {"author": {"display_name": "Zhang San"}}
+      ],
+      "primary_location": {
+        "source": {"display_name": "Digital Scholarship Quarterly"}
+      },
+      "abstract_inverted_index": {
+        "Digital": [0],
+        "humanities": [1]
+      },
+      "concepts": [
+        {"display_name": "Digital humanities", "score": 0.9}
+      ],
+      "topics": [],
+      "open_access": {
+        "is_oa": true,
+        "oa_url": "https://example.org/openalex.pdf"
+      }
+    }
+  ]
+}

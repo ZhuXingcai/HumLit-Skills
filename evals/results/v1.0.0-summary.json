@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "evaluation_type": "LLM semantic self-review",
+  "independent_evaluator": false,
+  "cases": 23,
+  "trigger_accuracy": 1.0,
+  "fragment_accuracy": 1.0,
+  "command_or_clarification_accuracy": 1.0,
+  "artifact": "v1.0.0-semantic.jsonl",
+  "capability_contract": "../capability-contract.json",
+  "offline_smoke": "../../scripts/smoke_test.py --mode offline",
+  "e2e_smoke_artifact": "v1.0.0-e2e-smoke.json",
+  "note": "Implementation-session self-review. It verifies declared routing and boundaries but is not an independent model evaluation."
+}

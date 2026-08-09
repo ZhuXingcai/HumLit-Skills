@@ -1,0 +1,40 @@
+name: humlit-skills
+version: 1.0.0
+description: >
+  Router manifest for the static/fragment split. SKILL.md（router）据此决定
+  按需 Read 哪些 fragment。非运行时解析，供 Agent 与人工参考。
+
+always_load:
+  - static/core/python-discovery.md
+  - static/core/output-rules.md
+
+axes:
+  task:
+    detect: |
+      Map user intent to one or more tasks.
+      搜索/检索→search, 下载/全文→download, 综述/选题/证据校验→review-write,
+      引用/导出/题录/引文网络→citation, Word/排版/读论文→docx
+    values:
+      search:        static/fragments/task/search.md
+      download:      static/fragments/task/download.md
+      review-write:  static/fragments/task/review-write.md
+      citation:      static/fragments/task/citation.md
+      docx:          static/fragments/task/docx.md
+      format:        static/fragments/task/format.md
+      blind-review:  static/fragments/task/blind-review.md
+      source-citation: static/fragments/task/source-citation.md
+      polish:        static/fragments/task/polish.md
+      journal-fit:   static/fragments/task/journal-fit.md
+      qual-coding:   static/fragments/task/qual-coding.md
+      theory-framework: static/fragments/task/theory-framework.md
+    multi: true
+
+on_demand:
+  capability-contract: evals/capability-contract.json
+  core-journals:  references/core-journals.md
+  theory-frameworks: references/theory-frameworks.md
+  error-codes:    references/error-codes.md
+  workflows:      references/workflows.md
+  api-best:       references/api-search-best-practices.md
+  environment:    references/environment.md
+  sandbox:        static/core/sandbox-escalation.md

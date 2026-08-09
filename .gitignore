@@ -1,0 +1,41 @@
+# Runtime data (cookies, session, cache)
+**/.humlit/
+
+# Downloaded papers
+papers/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+.codex/
+.claude/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Runtime temp files
+scripts/_batch_urls.txt
+scripts/_parse_search.py
+
+# Test artifacts
+.pytest_cache/
+_test_*.py
+cc-option-smoke.txt
+scripts/test_papers/
+*.tmp
+*.bak
+debug_*.html
+debug_*.json

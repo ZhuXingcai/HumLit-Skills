@@ -1,0 +1,16 @@
+{
+  "response": {
+    "docs": [
+      {
+        "dctitle": ["Open Archives and Public History"],
+        "dcauthor": ["Chen Ba"],
+        "dcyear": ["2020"],
+        "dcsource": ["Public History Review"],
+        "dcdoi": ["10.1000/base"],
+        "dclink": ["https://example.org/base"],
+        "dcdescription": ["A study of open archival infrastructures."],
+        "dcsubject": ["archives", "public history"]
+      }
+    ]
+  }
+}

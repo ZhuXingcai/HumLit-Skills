@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "search-cnki",
+      "prompt": "帮我检索近五年乡村振兴的 CSSCI 论文",
+      "should_trigger": true,
+      "task": "search",
+      "fragment": "static/fragments/task/search.md",
+      "command": "search"
+    },
+    {
+      "id": "download-fulltext",
+      "prompt": "把刚才第 1、3 篇知网论文全文下载下来",
+      "should_trigger": true,
+      "task": "download",
+      "fragment": "static/fragments/task/download.md",
+      "command": "batch-download"
+    },
+    {
+      "id": "write-review",
+      "prompt": "基于这批文献写一段可追溯的文献综述",
+      "should_trigger": true,
+      "task": "review-write",
+      "fragment": "static/fragments/task/review-write.md",
+      "command": "review"
+    },
+    {
+      "id": "citation",
+      "prompt": "把这些论文导出为 GB/T 7714 引用",
+      "should_trigger": true,
+      "task": "citation",
+      "fragment": "static/fragments/task/citation.md",
+      "command": "cite"
+    },
+    {
+      "id": "word",
+      "prompt": "把我的 Markdown 论文转成带参考文献的 Word",
+      "should_trigger": true,
+      "task": "docx",
+      "fragment": "static/fragments/task/docx.md",
+      "command": "write-docx"
+    },
+    {
+      "id": "format",
+      "prompt": "检查这篇学位论文的页边距、字体和标题层级",
+      "should_trigger": true,
+      "task": "format",
+      "fragment": "static/fragments/task/format.md",
+      "command": "format-check"
+    },
+    {
+      "id": "blind-review",
+      "prompt": "模拟盲审，看看这篇论文送审会不会被毙",
+      "should_trigger": true,
+      "task": "blind-review",
+      "fragment": "static/fragments/task/blind-review.md",
+      "command": "review-signals"
+    },
+    {
+      "id": "historical-source",
+      "prompt": "把这些地方志和档案整理成史料脚注",
+      "should_trigger": true,
+      "task": "source-citation",
+      "fragment": "static/fragments/task/source-citation.md",
+      "command": "cite-source"
+    },
+    {
+      "id": "polish",
+      "prompt": "诊断这段中文论文表述为什么不够学术",
+      "should_trigger": true,
+      "task": "polish",
+      "fragment": "static/fragments/task/polish.md",
+      "command": "polish-signals"
+    },
+    {
+      "id": "journal",
+      "prompt": "检查这篇 C 刊匿名稿有没有作者身份泄露",
+      "should_trigger": true,
+      "task": "journal-fit",
+      "fragment": "static/fragments/task/journal-fit.md",
+      "command": "journal-check"
+    },
+    {
+      "id": "qualitative",
+      "prompt": "按编码簿给访谈稿做质性编码和共现统计",
+      "should_trigger": true,
+      "task": "qual-coding",
+      "fragment": "static/fragments/task/qual-coding.md",
+      "command": "qual-code"
+    },
+    {
+      "id": "theory",
+      "prompt": "根据社会资本、信任和弱关系推荐理论框架",
+      "should_trigger": true,
+      "task": "theory-framework",
+      "fragment": "static/fragments/task/theory-framework.md",
+      "command": "theory-match"
+    },
+    {
+      "id": "download-oa-doi",
+      "prompt": "用 DOI 10.1038/sdata.2016.18 下载这篇开放获取论文的 PDF",
+      "should_trigger": true,
+      "task": "download",
+      "fragment": "static/fragments/task/download.md",
+      "command": "download"
+    },
+    {
+      "id": "pdf-metadata",
+      "prompt": "提取这个学术 PDF 的标题、作者和 DOI 元数据",
+      "should_trigger": true,
+      "task": "docx",
+      "fragment": "static/fragments/task/docx.md",
+      "command": "pdf-meta"
+    },
+    {
+      "id": "qualitative-open-coding",
+      "prompt": "对这批访谈做开放式编码并归纳新主题",
+      "should_trigger": true,
+      "task": "qual-coding",
+      "fragment": "static/fragments/task/qual-coding.md",
+      "command": "qual-codebook-template",
+      "boundary": "脚本只生成编码簿底稿和确定性命中；Agent/研究者完成开放编码与主题归纳"
+    },
+    {
+      "id": "negative-web",
+      "prompt": "帮我搜索今天北京的天气",
+      "should_trigger": false
+    },
+    {
+      "id": "negative-code",
+      "prompt": "查一下 Python pathlib 的官方文档",
+      "should_trigger": false
+    },
+    {
+      "id": "negative-translation",
+      "prompt": "把这句日常英语翻译成中文",
+      "should_trigger": false
+    },
+    {
+      "id": "negative-general-docx",
+      "prompt": "把会议通知排成一个好看的 Word 文档",
+      "should_trigger": false
+    },
+    {
+      "id": "negative-general-pdf",
+      "prompt": "把这份公司采购合同 PDF 提取成纯文本",
+      "should_trigger": false
+    },
+    {
+      "id": "negative-plagiarism-score",
+      "prompt": "直接给我检测知网查重率并保证降到 5%",
+      "should_trigger": false
+    },
+    {
+      "id": "negative-official-decision",
+      "prompt": "准确预测这篇论文能不能被 CSSCI 录用，给出官方结论",
+      "should_trigger": false
+    },
+    {
+      "id": "negative-current-news",
+      "prompt": "搜索今天最热门的科技新闻",
+      "should_trigger": false
+    }
+  ]
+}

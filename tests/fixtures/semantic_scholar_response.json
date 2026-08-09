@@ -1,0 +1,21 @@
+{
+  "data": [
+    {
+      "paperId": "S2-1",
+      "title": "Social Capital and Trust",
+      "authors": [{"name": "Li Si"}],
+      "year": 2023,
+      "abstract": "A study of social capital and institutional trust.",
+      "url": "https://www.semanticscholar.org/paper/S2-1",
+      "citationCount": 8,
+      "externalIds": {
+        "DOI": "10.1000/s2",
+        "ArXiv": null
+      },
+      "isOpenAccess": true,
+      "openAccessPdf": {"url": "https://example.org/s2.pdf"},
+      "fieldsOfStudy": ["Sociology"],
+      "venue": "Social Research"
+    }
+  ]
+}

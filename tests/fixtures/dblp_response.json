@@ -1,0 +1,22 @@
+{
+  "result": {
+    "hits": {
+      "hit": [
+        {
+          "info": {
+            "title": "Knowledge Graphs for Historical Archives",
+            "authors": {
+              "author": [{"text": "Sun Qi"}]
+            },
+            "year": "2021",
+            "venue": "Digital Libraries",
+            "doi": "10.1000/dblp",
+            "url": "https://dblp.org/rec/conf/example/1",
+            "ee": "https://example.org/dblp.pdf",
+            "type": "Conference Papers"
+          }
+        }
+      ]
+    }
+  }
+}

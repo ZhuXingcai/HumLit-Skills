@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <id>https://arxiv.org/abs/2401.00001v1</id>
+    <published>2024-01-01T00:00:00Z</published>
+    <title>Computational Methods for Archival Research</title>
+    <summary>A reproducible workflow for archival text analysis.</summary>
+    <author><name>Wang Wu</name></author>
+    <category term="cs.DL"/>
+    <link title="pdf" href="https://arxiv.org/pdf/2401.00001v1"/>
+  </entry>
+</feed>

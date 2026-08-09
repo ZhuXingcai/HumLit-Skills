@@ -1,0 +1,33 @@
+name: Live API Canary
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  maintained-live-capabilities:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [openalex, semantic, arxiv, nssd, dblp, oa-download, citations]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: scripts/requirements.lock
+
+      - name: Install runtime dependencies
+        run: python -m pip install -r scripts/requirements.lock
+
+      - name: Probe ${{ matrix.source }}
+        run: python scripts/smoke_test.py --mode live --sources "${{ matrix.source }}"

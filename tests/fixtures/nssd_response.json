@@ -1,0 +1,27 @@
+{
+  "result": true,
+  "code": 200,
+  "data": {
+    "total": 1,
+    "pages": 1,
+    "currentPage": 1,
+    "rows": [
+      {
+        "data_id": "PRP1",
+        "encryptedUrl": "fixture-token",
+        "title": "数字人文视域下的地方志知识组织",
+        "creator": "张三[1];李四[2]",
+        "cbw_name": "文献与数据学报",
+        "years": "2024",
+        "num": "2",
+        "beginpage": "10",
+        "endpage": "20",
+        "doi": "10.1000/nssd",
+        "remark": "本文讨论地方志资源的数字化组织与知识关联方法。",
+        "subject": "数字人文 地方志 知识组织",
+        "pdfurl": "https://ftprp.ncpssd.cn/example.pdf",
+        "type": "中文期刊文章"
+      }
+    ]
+  }
+}

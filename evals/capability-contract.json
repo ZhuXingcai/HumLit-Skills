@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "purpose": "Define what HumLit Skills can complete, under which preconditions, and how each claim is smoke-tested.",
+  "maturity_levels": {
+    "stable_offline": "Deterministic local capability after locked dependencies are installed.",
+    "conditional_live": "Implemented connector whose result depends on network and upstream service availability.",
+    "conditional_desktop": "Implemented desktop-browser capability requiring local browser, driver, authorization, and lawful institutional access.",
+    "agent_assisted": "Scripts provide auditable evidence or diagnostics; an Agent or researcher must complete interpretation or writing.",
+    "experimental": "Opt-in connector with known reliability limits; excluded from default aggregation and fallback."
+  },
+  "capabilities": [
+    {
+      "id": "public_api_search",
+      "maturity": "conditional_live",
+      "commands": ["search"],
+      "when_to_use": [
+        "Search scholarly metadata through OpenAlex, Semantic Scholar, arXiv, NSSD, or DBLP.",
+        "Use --source api for concurrent aggregation of the five maintained public sources."
+      ],
+      "when_not_to_use": [
+        "Do not use for general web search or non-academic content.",
+        "Do not claim exhaustive coverage when any source_statuses entry is error."
+      ],
+      "inputs": ["A non-empty scholarly query", "Optional year, author, journal, field, page, and sort filters", "Optional SEMANTIC_SCHOLAR_API_KEY to reduce anonymous rate limits"],
+      "output_contract": ["JSON status/count/results/source_statuses", "Every paper title and identifier comes from the live response", "Network errors are distinct from empty results"],
+      "failure_modes": ["SOURCE_UNAVAILABLE", "SOURCE_HTTP_ERROR", "SOURCE_SCHEMA_ERROR", "PARTIAL_SOURCE_FAILURE", "NO_RESULTS"],
+      "smoke": ["Fixture contracts in tests/test_api_contract_fixtures.py", "Live source probes via scripts/smoke_test.py --mode live"]
+    },
+    {
+      "id": "base_search",
+      "maturity": "experimental",
+      "commands": ["search"],
+      "opt_in_only": true,
+      "when_to_use": ["Explicitly requested exploratory search of BASE repositories after warning about reliability."],
+      "when_not_to_use": ["Do not include in --source api/all, automatic fallback, or claims of stable source coverage."],
+      "inputs": ["A non-empty scholarly query", "Explicit --source base"],
+      "output_contract": ["Same search JSON contract, with BASE source_statuses evidence"],
+      "failure_modes": ["SOURCE_UNAVAILABLE", "SOURCE_HTTP_ERROR", "SOURCE_SCHEMA_ERROR", "NO_RESULTS"],
+      "smoke": ["Fixture parser contract only; live reliability is not a release gate"]
+    },
+    {
+      "id": "cnki_research",
+      "maturity": "conditional_desktop",
+      "commands": ["search", "batch-search", "detail", "read-detail", "auth-cnki", "download", "batch-download"],
+      "when_to_use": [
+        "Search Chinese journals, theses, newspapers, or named core-journal systems unavailable from public APIs.",
+        "Retrieve CNKI detail pages or downloads when lawful institutional access is already available."
+      ],
+      "when_not_to_use": [
+        "Do not run in a pure cloud environment without a visible desktop browser.",
+        "Do not imply access when check.capabilities.cnki_feasible is false after an authorized retry.",
+        "Do not bypass paywalls, authentication, captchas, or CNKI terms."
+      ],
+      "inputs": ["Edge or Chrome and a matching driver", "Campus network, institutional VPN, or user-completed CARSI login", "A query, CNKI URL, or prior CNKI session"],
+      "output_contract": ["JSON result plus explicit actual file format for downloads", "Full-text failures degrade to labeled abstract evidence", "Partial batch failures retain per-item errors"],
+      "failure_modes": ["CNKI_UNREACHABLE", "CNKI_AUTH_FAILED", "DRIVER_MISSING", "SANDBOX_BLOCKED", "CNKI_DOWNLOAD_FAILED", "DOWNLOAD_TIMEOUT"],
+      "smoke": ["CNKI DOM and parser fixtures in tests", "Manual desktop canary required for authenticated search/download"]
+    },
+    {
+      "id": "oa_doi_download",
+      "maturity": "conditional_live",
+      "commands": ["download"],
+      "when_to_use": ["Resolve and download a legally open PDF from a DOI through Unpaywall or OpenAlex."],
+      "when_not_to_use": ["Do not promise a PDF for closed-access or missing OA records", "Do not treat an HTML landing page as a PDF"],
+      "inputs": ["A DOI", "Optional HUMLIT_MAILTO for Unpaywall", "Writable output directory"],
+      "output_contract": ["Verified %PDF file saved atomically", "JSON path/bytes/url/method", "--link-only returns a link without claiming a downloaded file"],
+      "failure_modes": ["OA_NOT_FOUND", "OA_DOWNLOAD_FAILED", "NO_DOWNLOAD_TARGET"],
+      "smoke": ["Unit download-signature tests", "Live DOI link/download probe via scripts/smoke_test.py --mode live"]
+    },
+    {
+      "id": "citation_network",
+      "maturity": "conditional_live",
+      "commands": ["citations"],
+      "when_to_use": ["Trace forward or backward citations for a DOI, arXiv ID, or supported paper URL."],
+      "when_not_to_use": ["Do not infer a complete citation graph when Semantic Scholar lacks the paper or rate-limits the request."],
+      "inputs": ["DOI, arXiv ID, or supported paper URL", "Direction and limit"],
+      "output_contract": ["JSON paper/citing/references with upstream identifiers"],
+      "failure_modes": ["NO_PAPER_ID", "RESOLVE_FAILED", "API_RATE_LIMIT", "SOURCE_UNAVAILABLE"],
+      "smoke": ["Live known-DOI probe via scripts/smoke_test.py --mode live"]
+    },
+    {
+      "id": "session_analysis",
+      "maturity": "stable_offline",
+      "commands": ["trends", "projects", "library"],
+      "when_to_use": ["Inspect a saved research library or compute descriptive year, keyword, citation, and source summaries."],
+      "when_not_to_use": ["Do not interpret descriptive counts as causal trends or field-wide coverage without documenting the search corpus."],
+      "inputs": ["A valid versioned session created by search or import"],
+      "output_contract": ["JSON summaries traceable to the stored records", "Corrupt sessions stop with a backup path instead of becoming an empty library"],
+      "failure_modes": ["NO_SESSION_DATA", "SESSION_CORRUPT"],
+      "smoke": ["research_library chain in scripts/smoke_test.py --mode offline"]
+    },
+    {
+      "id": "evidence_scaffolding",
+      "maturity": "agent_assisted",
+      "commands": ["review", "write", "validate", "topics"],
+      "human_or_agent_completion_required": true,
+      "when_to_use": ["Build a traceable evidence scaffold, outline, bounded draft, support check, or topic hypothesis from a saved corpus."],
+      "when_not_to_use": ["Do not present generated text as a publication-ready review", "Do not call corpus sparsity a real research gap without broader retrieval and full-text verification", "Do not treat lexical overlap as semantic entailment"],
+      "inputs": ["A session/project library", "A clearly stated topic", "Abstract or full-text evidence for claims that go beyond metadata"],
+      "output_contract": ["Evidence indices and trace_status", "Metadata-only items are labeled for full-text checking", "Drafts and topic suggestions state corpus bounds"],
+      "failure_modes": ["NO_SESSION_DATA", "SESSION_CORRUPT", "AUTHOR_INPUT_NEEDED"],
+      "smoke": ["research_library chain in scripts/smoke_test.py --mode offline"]
+    },
+    {
+      "id": "bibliography",
+      "maturity": "stable_offline",
+      "commands": ["cite", "export", "import"],
+      "when_to_use": ["Import supported bibliographic records and deterministically format/export known metadata."],
+      "when_not_to_use": ["Do not invent missing author, year, pages, edition, DOI, archive number, or source container", "Do not claim style compliance for fields absent from the source record"],
+      "inputs": ["Supported NoteExpress, Refworks, or BibTeX data, or a valid session", "Requested citation/export style"],
+      "output_contract": ["JSON or explicitly requested raw text", "Missing metadata remains visibly missing", "Optional Crossref enrichment is not required for base formatting"],
+      "failure_modes": ["IMPORT_PARSE_FAILED", "NO_SESSION_DATA", "UNSUPPORTED_EXPORT_FORMAT"],
+      "smoke": ["research_library chain in scripts/smoke_test.py --mode offline"]
+    },
+    {
+      "id": "document_io",
+      "maturity": "stable_offline",
+      "commands": ["write-docx", "patch-docx", "read-paper", "pdf-meta"],
+      "when_to_use": ["Read text/docx, create or patch docx, or extract bibliographic metadata from a local PDF."],
+      "when_not_to_use": ["Do not use read-paper for PDF full text", "Do not claim a patch succeeded when targets are reported not_found", "Do not use pdf-meta as a substitute for reading the paper"],
+      "inputs": ["Existing supported local file", "Patch JSON for patch-docx", "Locked python-docx and pypdf dependencies"],
+      "output_contract": ["JSON artifact paths and operation counts", "Original docx is not overwritten by default", "pdf-meta returns only observed metadata plus optional Crossref data"],
+      "failure_modes": ["FILE_NOT_FOUND", "UNSUPPORTED_FORMAT", "MISSING_DEPENDENCY", "PATCH_PARSE_FAILED", "PDF_READ_FAILED"],
+      "smoke": ["document_io chain in scripts/smoke_test.py --mode offline"]
+    },
+    {
+      "id": "thesis_format",
+      "maturity": "stable_offline",
+      "commands": ["format-profile", "format-check", "format-apply"],
+      "when_to_use": ["Turn supplied school/journal rules into a profile, inspect observable formatting, and apply fixable layout rules."],
+      "when_not_to_use": ["Do not claim unknown/unobservable dimensions passed", "Do not invent institution-specific requirements", "Do not auto-create missing scholarly content"],
+      "inputs": ["User-supplied requirements encoded as a validated profile", "Markdown, text, or docx manuscript"],
+      "output_contract": ["issues with severity/fixable and observed/unknown dimensions", "A new formatted docx", "Non-fixable content issues remain explicit"],
+      "failure_modes": ["PROFILE_INVALID", "PROFILE_PARSE_FAILED", "UNSUPPORTED_FORMAT"],
+      "smoke": ["format_and_review chain in scripts/smoke_test.py --mode offline"]
+    },
+    {
+      "id": "blind_review",
+      "maturity": "agent_assisted",
+      "commands": ["review-rubric", "review-signals"],
+      "human_or_agent_completion_required": true,
+      "when_to_use": ["Compute auditable readiness signals and conduct a bounded mock review against a stated rubric."],
+      "when_not_to_use": ["Do not represent the result as an official committee decision", "Do not score dimensions whose manuscript evidence was not read", "Do not turn integrity flags into misconduct findings"],
+      "inputs": ["Manuscript", "Default or user-supplied validated rubric", "Agent access to the actual text for qualitative judgments"],
+      "output_contract": ["Deterministic signals plus needs_human_judgment", "Agent report labels evidence gaps and simulation status"],
+      "failure_modes": ["RUBRIC_INVALID", "RUBRIC_PARSE_FAILED", "AUTHOR_INPUT_NEEDED"],
+      "smoke": ["format_and_review chain in scripts/smoke_test.py --mode offline"]
+    },
+    {
+      "id": "historical_source_citation",
+      "maturity": "stable_offline",
+      "commands": ["cite-source", "cite-source-template"],
+      "when_to_use": ["Format user-supplied ancient book, archive, gazetteer, epigraph, periodical, genealogy, or oral-history metadata."],
+      "when_not_to_use": ["Do not infer missing edition, juan, date, archive, fonds, file number, page, or provenance."],
+      "inputs": ["One or more source records with an explicit source_category"],
+      "output_contract": ["Deterministic footnote and/or GB/T 7714 text", "Per-entry missing-field warnings"],
+      "failure_modes": ["ENTRY_PARSE_FAILED", "EMPTY_ENTRIES", "INVALID_SOURCE_CATEGORY"],
+      "smoke": ["humanities_tools chain in scripts/smoke_test.py --mode offline"]
+    },
+    {
+      "id": "academic_polishing",
+      "maturity": "agent_assisted",
+      "commands": ["polish-signals"],
+      "human_or_agent_completion_required": true,
+      "when_to_use": ["Locate deterministic Chinese academic-writing signals before a meaning-preserving rewrite."],
+      "when_not_to_use": ["Do not treat signal counts as prose quality scores", "Do not rewrite without checking the author's intended meaning", "Do not claim plagiarism or similarity detection"],
+      "inputs": ["Chinese markdown, text, docx, or stdin"],
+      "output_contract": ["Located warning signals only", "Agent performs and explains any rewrite"],
+      "failure_modes": ["FILE_NOT_FOUND", "UNSUPPORTED_FORMAT", "ENCODING_ERROR"],
+      "smoke": ["humanities_tools chain in scripts/smoke_test.py --mode offline"]
+    },
+    {
+      "id": "journal_preflight",
+      "maturity": "stable_offline",
+      "commands": ["journal-profile", "journal-check"],
+      "when_to_use": ["Check observable length, abstract, keyword, reference, and anonymity rules against a supplied journal profile."],
+      "when_not_to_use": ["Do not infer acceptance probability, journal quality, scope fit, or unobserved editorial rules", "Do not delete identity-bearing text without user confirmation"],
+      "inputs": ["Manuscript", "Target journal instructions encoded as a validated profile"],
+      "output_contract": ["Rule issues and located anonymity leaks", "Body-only and total word-count scopes remain distinct"],
+      "failure_modes": ["PROFILE_INVALID", "PROFILE_PARSE_FAILED", "FILE_NOT_FOUND"],
+      "smoke": ["humanities_tools chain in scripts/smoke_test.py --mode offline"]
+    },
+    {
+      "id": "qualitative_coding",
+      "maturity": "agent_assisted",
+      "commands": ["qual-codebook-template", "qual-code"],
+      "human_or_agent_completion_required": true,
+      "when_to_use": ["Apply an explicit keyword/regex codebook reproducibly and compute paragraph-level co-occurrence."],
+      "when_not_to_use": ["Do not call it semantic open coding, grounded-theory saturation, theme discovery, or causal analysis"],
+      "inputs": ["Text corpus", "Validated codebook with literal keywords and/or regular expressions"],
+      "output_contract": ["Exact matches, locators, frequencies, uncovered paragraphs, and co-occurrence counts"],
+      "failure_modes": ["CODEBOOK_INVALID", "CODEBOOK_PARSE_FAILED", "BAD_PATTERN"],
+      "smoke": ["humanities_tools chain in scripts/smoke_test.py --mode offline"]
+    },
+    {
+      "id": "theory_framework",
+      "maturity": "agent_assisted",
+      "commands": ["theory-catalog", "theory-match"],
+      "human_or_agent_completion_required": true,
+      "when_to_use": ["Retrieve a bounded theory catalog and shortlist candidates by explicit keyword overlap."],
+      "when_not_to_use": ["Do not treat overlap score as theoretical fit, originality, explanatory power, or advisor endorsement", "Do not imply the built-in catalog is exhaustive"],
+      "inputs": ["Research keywords", "Optional discipline and schema-valid custom library"],
+      "output_contract": ["Candidate theories with matched keywords and catalog provenance", "Researcher verifies primary and field-specific literature"],
+      "failure_modes": ["NO_KEYWORDS", "LIBRARY_PARSE_FAILED", "LIBRARY_INVALID"],
+      "smoke": ["humanities_tools chain in scripts/smoke_test.py --mode offline"]
+    },
+    {
+      "id": "operations",
+      "maturity": "stable_offline",
+      "commands": ["check", "clean-cache", "workflows"],
+      "when_to_use": ["Inspect local prerequisites, clean derived cache files, or render/execute documented workflow templates."],
+      "when_not_to_use": ["Do not interpret connector_available as a successful live API probe", "Do not execute conditional workflow steps when their prerequisites are unmet"],
+      "inputs": ["Installed locked dependencies", "Workflow variables when executing a template"],
+      "output_contract": ["check separates maturity, connector readiness, and runtime verification", "workflow stops at the first failed step and preserves prior results"],
+      "failure_modes": ["WORKFLOW_NOT_FOUND", "INVALID_VARIABLES", "MISSING_VARIABLES", "REQUIREMENTS_NOT_MET", "WORKFLOW_STEP_FAILED"],
+      "smoke": ["workflow_routing chain in scripts/smoke_test.py --mode offline"]
+    }
+  ]
+}
