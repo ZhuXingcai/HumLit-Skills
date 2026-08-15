@@ -22,6 +22,17 @@ from cli._common import __version__  # noqa: E402
 from cli.registry import COMMANDS  # noqa: E402
 
 
+def _routing_cases() -> list:
+    data = json.loads(
+        (ROOT / "evals" / "skill-routing-cases.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    return list(data.get("cases", [])) + list(
+        data.get("extended_cases", [])
+    )
+
+
 def _version_from(pattern: str, path: Path) -> str:
     match = re.search(pattern, path.read_text(encoding="utf-8"), re.MULTILINE)
     if not match:
@@ -137,10 +148,7 @@ def verify_standalone_identity() -> None:
 def verify_router() -> None:
     skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
     manifest = (ROOT / "manifest.yaml").read_text(encoding="utf-8")
-    cases = json.loads(
-        (ROOT / "evals" / "skill-routing-cases.json").read_text(encoding="utf-8")
-    )["cases"]
-    for case in cases:
+    for case in _routing_cases():
         if not case["should_trigger"]:
             continue
         fragment = case["fragment"]
@@ -305,9 +313,7 @@ def main() -> int:
         "commands": len(COMMANDS),
         "capabilities": capability_count,
         "routing_evaluation": routing_evaluation,
-        "routing_cases": len(json.loads(
-            (ROOT / "evals" / "skill-routing-cases.json").read_text(encoding="utf-8")
-        )["cases"]),
+        "routing_cases": len(_routing_cases()),
     }, ensure_ascii=False))
     return 0
 

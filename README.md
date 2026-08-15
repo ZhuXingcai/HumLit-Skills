@@ -50,8 +50,8 @@ HumLit Skills 把确定性程序能力与语义判断分开：
 
 | 文件 | 作用 |
 |------|------|
-| [`SKILL.md`](SKILL.md) | Agent 路由器，定义何时使用、何时不使用以及按需加载规则 |
-| [`manifest.yaml`](manifest.yaml) | 任务与 fragment 的机器可读映射 |
+| [`SKILL.md`](SKILL.md) | 由 manifest 生成路由区的精简 Agent 入口 |
+| [`manifest.yaml`](manifest.yaml) | trigger、排除项、fragment、命令和能力的唯一真源 |
 | [`scripts/literature.py`](scripts/literature.py) | Python CLI 入口 |
 | [`evals/capability-contract.json`](evals/capability-contract.json) | 能力前置条件、输出、失败模式和 smoke 证据 |
 | [`references/error-codes.md`](references/error-codes.md) | 结构化错误码与应对方式 |
@@ -482,28 +482,31 @@ humlit auth-cnki \
 
 ```text
 HumLit-Skills/
-├── SKILL.md                       # Agent 路由器
-├── manifest.yaml                  # fragment 映射
+├── SKILL.md                       # 精简路由器（映射区自动生成）
+├── manifest.yaml                  # 路由唯一真源
 ├── setup.md                       # Agent 自动安装说明
 ├── pyproject.toml                 # Python 包与 CLI 元数据
-├── references/                    # 错误码、环境、工作流等参考资料
+├── references/                    # 按检索/工作流拆分的参考资料
 ├── static/
 │   ├── core/                      # 常驻执行规则
 │   └── fragments/task/            # 按任务加载的详细说明
 ├── scripts/
 │   ├── literature.py              # 统一 CLI 入口
+│   ├── generate_skill_index.py    # manifest → SKILL 路由区
+│   ├── verify_skill_architecture.py # 三层架构与预算门禁
 │   ├── cli/                       # 参数解析、命令分发和输出
 │   ├── core/                      # 搜索、格式化、文档和 CNKI 逻辑
 │   ├── requirements.lock          # 发布验证的运行时依赖
 │   └── requirements-dev.lock      # 测试依赖
 ├── evals/
 │   ├── capability-contract.json   # 能力合同
-│   ├── skill-routing-cases.json   # 正/负路由案例
+│   ├── skill-routing-cases.json   # 48 条正/负/模糊路由案例
 │   └── results/                   # 发布验证证据
 └── tests/                         # 单元、合同、E2E 与跨平台测试
 ```
 
 CLI 使用惰性导入：只加载当前命令对应的模块，避免离线格式化任务被浏览器或联网依赖阻塞。
+Skill 路由同样按需加载：当前任务开始前只有 146 行常驻内容。
 
 ## 质量与验证
 
@@ -519,12 +522,16 @@ CLI 使用惰性导入：只加载当前命令对应的模块，避免离线格�
 - 从源码构建 wheel。
 - 安装生成的 wheel，而不是依赖源码目录。
 - 验证中文路径、编码、当前目录变化和已安装入口。
+- 48 条路由案例已由独立只读模型评测，触发、fragment、命令或澄清准确率均为 100%。
 
 当前稳定版本的发布证据：
 
 - [`evals/results/v1.0.2-e2e-smoke.json`](evals/results/v1.0.2-e2e-smoke.json)
 - [`evals/results/v1.0.2-summary.json`](evals/results/v1.0.2-summary.json)
 - [HumLit Skills v1.0.2](https://github.com/ZhuXingcai/HumLit-Skills/releases/tag/v1.0.2)
+
+当前工作树的架构路由评测见
+[`evals/results/architecture-independent-summary.json`](evals/results/architecture-independent-summary.json)。
 
 联网 smoke 的失败可能来自上游限流或网络策略，必须和本地代码回归分开判断。
 
@@ -550,6 +557,10 @@ python -m pip install --no-deps .
 ```bash
 # 完整离线测试
 python -m pytest -q
+
+# Skill 索引和三层架构
+python scripts/generate_skill_index.py --check
+python scripts/verify_skill_architecture.py
 
 # 发布合同
 python scripts/verify_release.py --version 1.0.2

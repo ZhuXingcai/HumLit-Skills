@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "evaluation_type": "independent_semantic_routing",
+  "independent_evaluator": true,
+  "evaluated_at": "2026-08-15T06:42:13.205671+00:00",
+  "evaluator": {
+    "provider": "webinfra_model",
+    "model": "gpt-5.5-2026-04-24",
+    "run_id": "01a00427-7bc4-7443-820b-84b5dd3878ea"
+  },
+  "inputs": {
+    "skill_path": "SKILL.md",
+    "cases_path": "evals/skill-routing-cases.json",
+    "rubric_path": "evals/README.md",
+    "skill_sha256": "dc860785c492b5f7b7d180c25c2b88a51a37d239062fa87ac49bc43ab182425f",
+    "cases_sha256": "444db6ff38b054cc4b8f354024b97aec2fc259fe6b3353f6f4e07495ca66a92f",
+    "rubric_sha256": "b1634e723965fb7398a25a0a0c1ce0459f701cb6f2907d5e00f4d76f448070e6"
+  },
+  "request_sha256": "f75aefd268e0ce2c6d7a57c467babc2ba31819722220fb64a8fecda9bf27e224",
+  "results_sha256": "b9932b4a6005a7da98c3033ece6465ffd1f4c3c46d8fe920fba916eea460af48",
+  "artifact": "evals/results/architecture-routing-results.jsonl",
+  "cases": 48,
+  "trigger_accuracy": 1.0,
+  "fragment_accuracy": 1.0,
+  "command_or_clarification_accuracy": 1.0
+}

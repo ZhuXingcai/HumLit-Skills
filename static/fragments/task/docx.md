@@ -1,8 +1,18 @@
 # Task Fragment: Word 文档 / 排版 / 读论文
 
-> 对应命令：`write-docx` `patch-docx` `read-paper` `pdf-meta`。用户意图为生成 Word、在原 .docx 插引用/改写、读取用户论文、从 PDF 提取元数据时读本文件。
+## 触发条件
 
-## 决策指南
+学术 Word 生成/补丁、读取论文或提取学术 PDF 元数据。
+
+## 排除条件
+
+合同、简历、通知等普通办公文档，或把 PDF 元数据当作全文内容。
+
+## 前置条件
+
+输入文件存在；Word 命令需要 python-docx，PDF 元数据需要 pypdf。
+
+## 决策流程
 
 | 用户意图 | 命令 | 降级 |
 |----------|------|------|
@@ -13,7 +23,7 @@
 
 **docx_tools: false** → write-docx/patch-docx 不可用，降级输出 Markdown。
 
-## 命令速查
+## 命令
 
 | 命令 | 用途 | 关键参数 |
 |------|------|----------|
@@ -31,7 +41,15 @@
 - `patch-docx` 通过 patch JSON 描述插入位置与内容（引用/脚注），尽量保留原文格式；必须检查 `not_found`/`warnings`，`status:partial` 不能宣称全部修改成功。
 - 本 fragment 只处理学术文档。普通合同、简历、会议通知等 Word/PDF 办公任务不应触发 HumLit Skills。
 
-## 相关工作流
+## 输出合同
+
+返回产物路径、操作计数、warnings 和 OOXML 可观测边界；默认不覆盖原 Word。
+
+## 停止与降级
+
+依赖缺失时按任务降级为 Markdown/纯文本；补丁 `partial/not_found` 不得声称全部成功；扫描 PDF 改用专用 PDF/OCR 工具。
+
+## 附件
 
 - [改写论文并生成 Word](../../../references/workflows.md#改写论文并生成-word内容大改) — read-paper → 改写 → write-docx
 - [在原论文中插入引用](../../../references/workflows.md#在原论文中插入引用保留格式) — read-paper → 搜索 → patch JSON → patch-docx

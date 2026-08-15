@@ -162,5 +162,232 @@
       "prompt": "搜索今天最热门的科技新闻",
       "should_trigger": false
     }
+  ],
+  "extended_cases": [
+    {
+      "id": "search-citation-network",
+      "kind": "positive",
+      "prompt": "追踪 DOI 10.1038/sdata.2016.18 的前向和后向引用",
+      "should_trigger": true,
+      "task": "search",
+      "fragment": "static/fragments/task/search.md",
+      "command": "citations"
+    },
+    {
+      "id": "review-topic-hypotheses",
+      "kind": "positive",
+      "prompt": "基于当前课题库生成几个待验证的选题假设",
+      "should_trigger": true,
+      "task": "review-write",
+      "fragment": "static/fragments/task/review-write.md",
+      "command": "topics"
+    },
+    {
+      "id": "citation-import",
+      "kind": "positive",
+      "prompt": "把这个 NoteExpress 题录文件导入课题库",
+      "should_trigger": true,
+      "task": "citation",
+      "fragment": "static/fragments/task/citation.md",
+      "command": "import"
+    },
+    {
+      "id": "format-apply",
+      "kind": "positive",
+      "prompt": "按照这个学校格式 profile 把论文排成新的 Word",
+      "should_trigger": true,
+      "task": "format",
+      "fragment": "static/fragments/task/format.md",
+      "command": "format-apply"
+    },
+    {
+      "id": "source-template",
+      "kind": "positive",
+      "prompt": "给我一份档案史料引用需要填写的字段模板",
+      "should_trigger": true,
+      "task": "source-citation",
+      "fragment": "static/fragments/task/source-citation.md",
+      "command": "cite-source-template"
+    },
+    {
+      "id": "polish-signals-file",
+      "kind": "positive",
+      "prompt": "定位这篇中文论文里的长句、口语词和重复表达",
+      "should_trigger": true,
+      "task": "polish",
+      "fragment": "static/fragments/task/polish.md",
+      "command": "polish-signals"
+    },
+    {
+      "id": "journal-profile",
+      "kind": "positive",
+      "prompt": "生成一个可以填写 C 刊投稿要求的 profile 模板",
+      "should_trigger": true,
+      "task": "journal-fit",
+      "fragment": "static/fragments/task/journal-fit.md",
+      "command": "journal-profile"
+    },
+    {
+      "id": "theory-catalog",
+      "kind": "positive",
+      "prompt": "列出传播学常用理论并按制度关键词筛选",
+      "should_trigger": true,
+      "task": "theory-framework",
+      "fragment": "static/fragments/task/theory-framework.md",
+      "command": "theory-catalog"
+    },
+    {
+      "id": "operations-check",
+      "kind": "positive",
+      "prompt": "检查 HumLit 的 Python、依赖、浏览器和数据源前置条件",
+      "should_trigger": true,
+      "task": "operations",
+      "fragment": "static/core/python-discovery.md",
+      "command": "check"
+    },
+    {
+      "id": "negative-paywall-bypass",
+      "kind": "negative",
+      "prompt": "帮我绕过付费墙和验证码下载这篇收费论文",
+      "should_trigger": false
+    },
+    {
+      "id": "negative-medical-advice",
+      "kind": "negative",
+      "prompt": "根据我的症状直接诊断疾病并开药",
+      "should_trigger": false
+    },
+    {
+      "id": "negative-legal-document",
+      "kind": "negative",
+      "prompt": "审查这份采购合同并给出正式法律意见",
+      "should_trigger": false
+    },
+    {
+      "id": "negative-misconduct-decision",
+      "kind": "negative",
+      "prompt": "仅凭这段文字正式认定作者存在学术不端",
+      "should_trigger": false
+    },
+    {
+      "id": "ambiguous-find-papers",
+      "kind": "ambiguous",
+      "prompt": "帮我找论文",
+      "should_trigger": true,
+      "task": "search",
+      "fragment": "static/fragments/task/search.md",
+      "command": "search",
+      "clarify": true
+    },
+    {
+      "id": "ambiguous-write-review",
+      "kind": "ambiguous",
+      "prompt": "帮我写综述",
+      "should_trigger": true,
+      "task": "review-write",
+      "fragment": "static/fragments/task/review-write.md",
+      "command": "review",
+      "clarify": true
+    },
+    {
+      "id": "ambiguous-edit-paper",
+      "kind": "ambiguous",
+      "prompt": "帮我改一下论文",
+      "should_trigger": true,
+      "task": "polish",
+      "fragment": "static/fragments/task/polish.md",
+      "command": "polish-signals",
+      "clarify": true
+    },
+    {
+      "id": "ambiguous-download",
+      "kind": "ambiguous",
+      "prompt": "帮我下载论文",
+      "should_trigger": true,
+      "task": "download",
+      "fragment": "static/fragments/task/download.md",
+      "command": "download",
+      "clarify": true
+    },
+    {
+      "id": "ambiguous-word",
+      "kind": "ambiguous",
+      "prompt": "把这些内容放进 Word",
+      "should_trigger": true,
+      "task": "docx",
+      "fragment": "static/fragments/task/docx.md",
+      "command": "write-docx",
+      "clarify": true
+    },
+    {
+      "id": "ambiguous-format",
+      "kind": "ambiguous",
+      "prompt": "检查一下论文格式",
+      "should_trigger": true,
+      "task": "format",
+      "fragment": "static/fragments/task/format.md",
+      "command": "format-check",
+      "clarify": true
+    },
+    {
+      "id": "ambiguous-blind-review",
+      "kind": "ambiguous",
+      "prompt": "帮我审一下这篇论文",
+      "should_trigger": true,
+      "task": "blind-review",
+      "fragment": "static/fragments/task/blind-review.md",
+      "command": "review-signals",
+      "clarify": true
+    },
+    {
+      "id": "ambiguous-source-citation",
+      "kind": "ambiguous",
+      "prompt": "这批史料怎么引用",
+      "should_trigger": true,
+      "task": "source-citation",
+      "fragment": "static/fragments/task/source-citation.md",
+      "command": "cite-source",
+      "clarify": true
+    },
+    {
+      "id": "ambiguous-journal",
+      "kind": "ambiguous",
+      "prompt": "检查一下这个投稿稿",
+      "should_trigger": true,
+      "task": "journal-fit",
+      "fragment": "static/fragments/task/journal-fit.md",
+      "command": "journal-check",
+      "clarify": true
+    },
+    {
+      "id": "ambiguous-qualitative",
+      "kind": "ambiguous",
+      "prompt": "给这些访谈做质性编码",
+      "should_trigger": true,
+      "task": "qual-coding",
+      "fragment": "static/fragments/task/qual-coding.md",
+      "command": "qual-codebook-template",
+      "clarify": true
+    },
+    {
+      "id": "ambiguous-theory",
+      "kind": "ambiguous",
+      "prompt": "给我的研究推荐理论",
+      "should_trigger": true,
+      "task": "theory-framework",
+      "fragment": "static/fragments/task/theory-framework.md",
+      "command": "theory-match",
+      "clarify": true
+    },
+    {
+      "id": "ambiguous-search-and-cite",
+      "kind": "ambiguous",
+      "prompt": "检索数字人文论文并整理成 GB/T 7714 引用",
+      "should_trigger": true,
+      "task": "search",
+      "fragment": "static/fragments/task/search.md",
+      "command": "search",
+      "clarify": false
+    }
   ]
 }

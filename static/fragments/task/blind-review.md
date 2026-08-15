@@ -1,14 +1,24 @@
 # Task Fragment: 盲审模拟
 
-> 对应命令：`review-rubric` `review-signals`。用户意图为"模拟盲审/投稿前自审/送审前自查/帮我审一下论文/会不会被毙/盲审会怎么评"时读本文件。
+## 触发条件
 
-## 工作流
+模拟盲审、投稿前自审或送审就绪度信号。
+
+## 排除条件
+
+官方结论、录用/答辩预测，或把 integrity flag 直接定性为学术不端。
+
+## 前置条件
+
+需要实际论文内容；特定标准需用户提供 rubric。
+
+## 决策流程
 
 1. **（可选）准备 rubric** → 默认用教育部 4 维；用户给特定学校/期刊标准时，`review-rubric --template --output rubric.json`，按要求改维度/权重（权重和=100），再 `review-rubric --validate rubric.json`。
 2. **算信号** → `review-signals thesis.docx [--rubric rubric.json] [--format-profile p.json]`，得到按维度归类的可度量信号 + needs_human_judgment + integrity_flags。
 3. **扮演盲审专家** → Agent 按下方协议读论文实际内容，结合信号产出 3 位专家报告 + 1 份交叉综述。
 
-## 命令速查
+## 命令
 
 | 命令 | 用途 | 关键参数 |
 |------|------|----------|
@@ -39,3 +49,15 @@
 - `review-signals` 即使信号显示论文较弱仍 `status:success`；脚本故障才是 error。
 - `--format-profile` 传入时，「学术规范」维度的 `format_check` 内嵌 P0-② 检测结果（error/warning 数）。
 - 错误码见 [error-codes.md](../../../references/error-codes.md)。
+
+## 输出合同
+
+脚本返回确定性 signals 和 `needs_human_judgment`；Agent 报告必须标明模拟性质、证据缺口和人工评分依据。
+
+## 停止与降级
+
+读不到论文内容时对应维度标 `AUTHOR_INPUT_NEEDED`；不得补猜分数、证据或章节。
+
+## 附件
+
+- [错误码](../../../references/error-codes.md)

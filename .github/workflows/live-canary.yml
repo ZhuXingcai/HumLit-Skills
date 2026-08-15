@@ -30,4 +30,17 @@ jobs:
         run: python -m pip install -r scripts/requirements.lock
 
       - name: Probe ${{ matrix.source }}
-        run: python scripts/smoke_test.py --mode live --sources "${{ matrix.source }}"
+        env:
+          SEMANTIC_SCHOLAR_API_KEY: ${{ secrets.SEMANTIC_SCHOLAR_API_KEY }}
+        run: >-
+          python scripts/smoke_test.py --mode live
+          --sources "${{ matrix.source }}"
+          | tee "live-${{ matrix.source }}.json"
+
+      - name: Upload probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-${{ matrix.source }}
+          path: live-${{ matrix.source }}.json
+          if-no-files-found: warn

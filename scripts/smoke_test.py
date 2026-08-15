@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Union
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,7 +22,18 @@ class SmokeFailure(RuntimeError):
     pass
 
 
-def _run_cli(workdir: Path, *args: str, timeout: int = 60) -> Dict[str, Any]:
+@dataclass(frozen=True)
+class SmokeOutcome:
+    status: str
+    details: Dict[str, Any]
+
+
+def _run_cli(
+    workdir: Path,
+    *args: str,
+    timeout: int = 60,
+    allow_error_payload: bool = False,
+) -> Dict[str, Any]:
     result = subprocess.run(
         [sys.executable, str(ENTRY), *args],
         cwd=workdir,
@@ -41,7 +54,10 @@ def _run_cli(workdir: Path, *args: str, timeout: int = 60) -> Dict[str, Any]:
         raise SmokeFailure(
             f"{' '.join(args)} polluted stdout: {result.stdout[:300]!r}"
         ) from exc
-    if payload.get("status") not in {"success", "partial", "warning"}:
+    if (
+        payload.get("status") not in {"success", "partial", "warning"}
+        and not allow_error_payload
+    ):
         raise SmokeFailure(
             f"{' '.join(args)} returned {payload.get('status')}: "
             f"{payload.get('code', '')} {payload.get('message', '')}".strip()
@@ -49,10 +65,19 @@ def _run_cli(workdir: Path, *args: str, timeout: int = 60) -> Dict[str, Any]:
     return payload
 
 
-def _record(check_id: str, run: Callable[[], Dict[str, Any]]) -> Dict[str, Any]:
+def _record(
+    check_id: str,
+    run: Callable[[], Union[Dict[str, Any], SmokeOutcome]],
+) -> Dict[str, Any]:
     try:
-        details = run()
-        return {"id": check_id, "status": "success", "details": details}
+        result = run()
+        if isinstance(result, SmokeOutcome):
+            return {
+                "id": check_id,
+                "status": result.status,
+                "details": result.details,
+            }
+        return {"id": check_id, "status": "success", "details": result}
     except Exception as exc:
         return {
             "id": check_id,
@@ -415,7 +440,27 @@ LIVE_SOURCES = {
 }
 
 
-def _live_search(workdir: Path, source_id: str) -> Dict[str, Any]:
+def classify_live_status(
+    source_id: str,
+    payload: Dict[str, Any],
+    *,
+    api_key_configured: bool,
+) -> str:
+    if payload.get("status") in {"success", "partial", "warning"}:
+        return "success"
+    if (
+        source_id == "semantic"
+        and payload.get("code") == "API_RATE_LIMIT"
+        and not api_key_configured
+    ):
+        return "conditional"
+    return "error"
+
+
+def _live_search(
+    workdir: Path,
+    source_id: str,
+) -> Union[Dict[str, Any], SmokeOutcome]:
     query, cli_source = LIVE_SOURCES[source_id]
     payload = _run_cli(
         workdir,
@@ -426,7 +471,31 @@ def _live_search(workdir: Path, source_id: str) -> Dict[str, Any]:
         "--limit",
         "1",
         timeout=90,
+        allow_error_payload=True,
     )
+    probe_status = classify_live_status(
+        source_id,
+        payload,
+        api_key_configured=bool(
+            os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "").strip()
+        ),
+    )
+    if probe_status == "conditional":
+        return SmokeOutcome(
+            status="conditional",
+            details={
+                "code": payload.get("code"),
+                "message": payload.get("message"),
+                "source": "semantic_scholar",
+                "api_key_configured": False,
+            },
+        )
+    if probe_status == "error":
+        raise SmokeFailure(
+            f"search {query} --source {cli_source} returned "
+            f"{payload.get('status')}: {payload.get('code', '')} "
+            f"{payload.get('message', '')}".strip()
+        )
     if payload.get("count", 0) < 1 or not payload.get("results", [{}])[0].get("title"):
         raise SmokeFailure(f"{source_id} returned no titled record")
     expected_status_key = "semantic_scholar" if source_id == "semantic" else source_id
@@ -518,6 +587,24 @@ def run_live(selected: List[str]) -> List[Dict[str, Any]]:
         return checks
 
 
+def summarize_checks(
+    mode: str,
+    checks: List[Dict[str, Any]],
+) -> tuple:
+    failed = sum(item["status"] == "error" for item in checks)
+    conditional = sum(item["status"] == "conditional" for item in checks)
+    passed = sum(item["status"] == "success" for item in checks)
+    status = "error" if failed else "conditional" if conditional else "success"
+    return {
+        "status": status,
+        "mode": mode,
+        "checks": checks,
+        "passed": passed,
+        "conditional": conditional,
+        "failed": failed,
+    }, 1 if failed else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=["offline", "live", "all"], default="offline")
@@ -535,16 +622,9 @@ def main() -> int:
         selected = [item.strip() for item in args.sources.split(",") if item.strip()]
         checks.extend(run_live(selected))
 
-    failed = sum(item["status"] != "success" for item in checks)
-    payload = {
-        "status": "success" if failed == 0 else "error",
-        "mode": args.mode,
-        "checks": checks,
-        "passed": len(checks) - failed,
-        "failed": failed,
-    }
+    payload, exit_code = summarize_checks(args.mode, checks)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
-    return 0 if failed == 0 else 1
+    return exit_code
 
 
 if __name__ == "__main__":

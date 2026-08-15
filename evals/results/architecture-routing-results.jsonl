@@ -1,0 +1,48 @@
+{"id":"search-cnki","trigger":true,"fragment":"static/fragments/task/search.md","command":"search","clarify":false,"reason":"学术文献检索且限定近五年/CSSCI，匹配 search；先执行检索。"}
+{"id":"download-fulltext","trigger":true,"fragment":"static/fragments/task/download.md","command":"batch-download","clarify":false,"reason":"请求批量下载已选知网论文全文，属于合法全文下载路径；需依赖本地授权而非绕过。"}
+{"id":"write-review","trigger":true,"fragment":"static/fragments/task/review-write.md","command":"review","clarify":false,"reason":"要求基于一批文献写可追溯综述，匹配 review-write；输出需核对原文证据。"}
+{"id":"citation","trigger":true,"fragment":"static/fragments/task/citation.md","command":"cite","clarify":false,"reason":"导出 GB/T 7714 引用属于参考文献格式化，匹配 citation。"}
+{"id":"word","trigger":true,"fragment":"static/fragments/task/docx.md","command":"write-docx","clarify":false,"reason":"Markdown 论文转带参考文献 Word 是学术文档生成，匹配 docx。"}
+{"id":"format","trigger":true,"fragment":"static/fragments/task/format.md","command":"format-check","clarify":false,"reason":"检查学位论文页边距、字体、标题层级属于论文格式检查。"}
+{"id":"blind-review","trigger":true,"fragment":"static/fragments/task/blind-review.md","command":"review-signals","clarify":false,"reason":"模拟盲审属于有边界送审信号评估，不能给官方结论。"}
+{"id":"historical-source","trigger":true,"fragment":"static/fragments/task/source-citation.md","command":"cite-source","clarify":false,"reason":"地方志和档案整理为史料脚注，匹配 source-citation。"}
+{"id":"polish","trigger":true,"fragment":"static/fragments/task/polish.md","command":"polish-signals","clarify":false,"reason":"诊断中文论文表达学术性，匹配中文学术表达诊断而非查重规避。"}
+{"id":"journal","trigger":true,"fragment":"static/fragments/task/journal-fit.md","command":"journal-check","clarify":false,"reason":"C 刊匿名稿作者身份泄露自查匹配 journal-fit。"}
+{"id":"qualitative","trigger":true,"fragment":"static/fragments/task/qual-coding.md","command":"qual-code","clarify":false,"reason":"按编码簿做规则命中和共现统计，匹配 qual-coding；不冒充语义开放编码结论。"}
+{"id":"theory","trigger":true,"fragment":"static/fragments/task/theory-framework.md","command":"theory-match","clarify":false,"reason":"基于关键词推荐理论框架候选，匹配 theory-framework；仅为候选匹配。"}
+{"id":"download-oa-doi","trigger":true,"fragment":"static/fragments/task/download.md","command":"download","clarify":false,"reason":"用 DOI 下载开放获取 PDF，属于 OA 合法下载。"}
+{"id":"pdf-metadata","trigger":true,"fragment":"static/fragments/task/docx.md","command":"pdf-meta","clarify":false,"reason":"提取学术 PDF 标题、作者、DOI 元数据，匹配 docx/pdf-meta。"}
+{"id":"qualitative-open-coding","trigger":true,"fragment":"static/fragments/task/qual-coding.md","command":"qual-codebook-template","clarify":false,"reason":"开放式编码和主题归纳需研究者判断；脚本只可先生成编码簿底稿/确定性命中。"}
+{"id":"negative-web","trigger":false,"fragment":null,"command":null,"clarify":false,"reason":"天气搜索是通用实时信息，不属于 HumLit 学术能力。"}
+{"id":"negative-code","trigger":false,"fragment":null,"command":null,"clarify":false,"reason":"Python pathlib 官方文档是代码文档搜索，明确排除。"}
+{"id":"negative-translation","trigger":false,"fragment":null,"command":null,"clarify":false,"reason":"日常翻译单独请求不属于该技能范围。"}
+{"id":"negative-general-docx","trigger":false,"fragment":null,"command":null,"clarify":false,"reason":"会议通知是普通办公文档，不是学术 Word/论文处理。"}
+{"id":"negative-general-pdf","trigger":false,"fragment":null,"command":null,"clarify":false,"reason":"公司采购合同 PDF 属普通/法律文档，不是学术 PDF。"}
+{"id":"negative-plagiarism-score","trigger":false,"fragment":null,"command":null,"clarify":false,"reason":"查重率保证和降重规避检测被明确排除。"}
+{"id":"negative-official-decision","trigger":false,"fragment":null,"command":null,"clarify":false,"reason":"准确预测 CSSCI 录用并给官方结论超出边界。"}
+{"id":"negative-current-news","trigger":false,"fragment":null,"command":null,"clarify":false,"reason":"热门科技新闻是通用当前新闻搜索，明确排除。"}
+{"id":"search-citation-network","trigger":true,"fragment":"static/fragments/task/search.md","command":"citations","clarify":false,"reason":"追踪 DOI 的前向/后向引用属于引文追踪，匹配 search/citations。"}
+{"id":"review-topic-hypotheses","trigger":true,"fragment":"static/fragments/task/review-write.md","command":"topics","clarify":false,"reason":"基于课题库生成待验证选题假设属于 review-write；需标注为待验证。"}
+{"id":"citation-import","trigger":true,"fragment":"static/fragments/task/citation.md","command":"import","clarify":false,"reason":"NoteExpress 题录导入课题库属于引用/题录导入。"}
+{"id":"format-apply","trigger":true,"fragment":"static/fragments/task/format.md","command":"format-apply","clarify":false,"reason":"按已给学校格式 profile 套用到论文 Word，匹配 format-apply。"}
+{"id":"source-template","trigger":true,"fragment":"static/fragments/task/source-citation.md","command":"cite-source-template","clarify":false,"reason":"请求档案史料引用字段模板，匹配 source-citation 模板生成。"}
+{"id":"polish-signals-file","trigger":true,"fragment":"static/fragments/task/polish.md","command":"polish-signals","clarify":false,"reason":"定位长句、口语词、重复表达属于中文学术表达诊断信号。"}
+{"id":"journal-profile","trigger":true,"fragment":"static/fragments/task/journal-fit.md","command":"journal-profile","clarify":false,"reason":"生成 C 刊投稿要求 profile 模板，匹配 journal-fit profile。"}
+{"id":"theory-catalog","trigger":true,"fragment":"static/fragments/task/theory-framework.md","command":"theory-catalog","clarify":false,"reason":"列出传播学理论并按关键词筛选，匹配 theory-catalog；筛选不是最终适配结论。"}
+{"id":"operations-check","trigger":true,"fragment":"static/core/python-discovery.md","command":"check","clarify":false,"reason":"检查 Python、依赖、浏览器和数据源前置条件属于 operations/check。"}
+{"id":"negative-paywall-bypass","trigger":false,"fragment":null,"command":null,"clarify":false,"reason":"绕过付费墙和验证码下载收费论文被明确禁止。"}
+{"id":"negative-medical-advice","trigger":false,"fragment":null,"command":null,"clarify":false,"reason":"诊断疾病并开药是医疗建议，不属于 HumLit。"}
+{"id":"negative-legal-document","trigger":false,"fragment":null,"command":null,"clarify":false,"reason":"正式法律意见和合同审查不属于该学术技能。"}
+{"id":"negative-misconduct-decision","trigger":false,"fragment":null,"command":null,"clarify":false,"reason":"仅凭文字正式认定学术不端属于官方/高风险结论，明确排除。"}
+{"id":"ambiguous-find-papers","trigger":true,"fragment":"static/fragments/task/search.md","command":"search","clarify":true,"reason":"“找论文”触发学术检索，但需澄清主题、来源、时间和筛选条件。"}
+{"id":"ambiguous-write-review","trigger":true,"fragment":"static/fragments/task/review-write.md","command":"review","clarify":true,"reason":"“写综述”触发 review-write，但需澄清文献范围、主题和是否有可核对材料。"}
+{"id":"ambiguous-edit-paper","trigger":true,"fragment":"static/fragments/task/polish.md","command":"polish-signals","clarify":true,"reason":"“改论文”可触发学术润色诊断，但需澄清是语言、结构、格式还是审稿。"}
+{"id":"ambiguous-download","trigger":true,"fragment":"static/fragments/task/download.md","command":"download","clarify":true,"reason":"“下载论文”触发下载能力，但需澄清 DOI/题名/来源及合法访问条件。"}
+{"id":"ambiguous-word","trigger":true,"fragment":"static/fragments/task/docx.md","command":"write-docx","clarify":true,"reason":"“内容放进 Word”可能是学术文档生成，需确认是否论文及参考文献/格式要求。"}
+{"id":"ambiguous-format","trigger":true,"fragment":"static/fragments/task/format.md","command":"format-check","clarify":true,"reason":"“论文格式”触发 format-check，但需澄清学校/期刊 profile 或检查标准。"}
+{"id":"ambiguous-blind-review","trigger":true,"fragment":"static/fragments/task/blind-review.md","command":"review-signals","clarify":true,"reason":"“审一下论文”可触发模拟盲审信号，但需澄清审查维度且不能给官方结论。"}
+{"id":"ambiguous-source-citation","trigger":true,"fragment":"static/fragments/task/source-citation.md","command":"cite-source","clarify":true,"reason":"“史料怎么引用”触发史料引用，但需澄清版本、卷次、档号等用户提供信息。"}
+{"id":"ambiguous-journal","trigger":true,"fragment":"static/fragments/task/journal-fit.md","command":"journal-check","clarify":true,"reason":"“投稿稿检查”触发 journal-fit，但需澄清目标期刊和要查硬性规则/匿名泄露。"}
+{"id":"ambiguous-qualitative","trigger":true,"fragment":"static/fragments/task/qual-coding.md","command":"qual-codebook-template","clarify":true,"reason":"“质性编码”触发 qual-coding，但无编码簿时先生成底稿并需澄清材料和规则。"}
+{"id":"ambiguous-theory","trigger":true,"fragment":"static/fragments/task/theory-framework.md","command":"theory-match","clarify":true,"reason":"“推荐理论”触发 theory-framework，但需澄清研究问题、关键词和学科边界。"}
+{"id":"ambiguous-search-and-cite","trigger":true,"fragment":"static/fragments/task/search.md","command":"search","clarify":false,"reason":"同时要求检索数字人文论文并整理引用，第一确定性动作是先检索，再可进入 citation。"}

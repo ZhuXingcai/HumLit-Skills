@@ -1,8 +1,18 @@
 # Task Fragment: 下载 / 全文获取
 
-> 对应命令：`search --download` `download` `batch-download` `read-detail` `detail` `auth-cnki`。用户意图为下载论文/全文、批量下载、校外访问知网时读本文件。
+## 触发条件
 
-## 决策指南
+下载合法 OA PDF、CNKI 论文、详情、摘要/全文或建立校外认证会话。
+
+## 排除条件
+
+绕过付费墙、验证码、机构认证，或把摘要冒充全文。
+
+## 前置条件
+
+DOI OA 需要网络；CNKI 需要本地浏览器、Driver 和用户合法机构权限。
+
+## 决策流程
 
 | 用户意图 | cnki_feasible: true | cnki_feasible: false |
 |----------|--------------------|--------------------|
@@ -10,7 +20,7 @@
 | 下载 CNKI 论文 | `search --download` 或 `batch-download` | 不可用；不能用普通 API 摘要冒充全文 |
 | 获取摘要/全文 | `read-detail --indices ... --fulltext` | API 源用搜索返回的摘要 |
 
-## 命令速查
+## 命令
 
 | 命令 | 用途 | 关键参数 |
 |------|------|----------|
@@ -65,3 +75,17 @@
 - 命令超时转后台时，必须轮询终端文件直到出现 exit_code
 
 沙盒/提权问题详见 [sandbox-escalation.md](../../core/sandbox-escalation.md)。
+
+## 输出合同
+
+JSON 明确实际文件格式、保存路径、字节数、缓存/降级和逐项失败；只有签名验证通过的 PDF 才算已下载。
+
+## 停止与降级
+
+无 OA、HTML 响应、超限或权限失败时不得声称下载成功；CNKI 全文失败可降级为明确标注的摘要，不能用公开 API 摘要冒充全文。
+
+## 附件
+
+- [环境与校外认证](../../../references/environment.md)
+- [错误码](../../../references/error-codes.md)
+- [工作流](../../../references/workflows.md)

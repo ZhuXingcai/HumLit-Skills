@@ -1,33 +1,119 @@
 name: humlit-skills
 version: 1.0.2
 description: >
-  Router manifest for the static/fragment split. SKILL.md（router）据此决定
-  按需 Read 哪些 fragment。非运行时解析，供 Agent 与人工参考。
+  Single source of truth for Skill discovery routes, task fragments,
+  commands, capability contracts, and on-demand references.
 
 always_load:
   - static/core/python-discovery.md
   - static/core/output-rules.md
 
-axes:
-  task:
-    detect: |
-      Map user intent to one or more tasks.
-      搜索/检索→search, 下载/全文→download, 综述/选题/证据校验→review-write,
-      引用/导出/题录/引文网络→citation, Word/排版/读论文→docx
-    values:
-      search:        static/fragments/task/search.md
-      download:      static/fragments/task/download.md
-      review-write:  static/fragments/task/review-write.md
-      citation:      static/fragments/task/citation.md
-      docx:          static/fragments/task/docx.md
-      format:        static/fragments/task/format.md
-      blind-review:  static/fragments/task/blind-review.md
-      source-citation: static/fragments/task/source-citation.md
-      polish:        static/fragments/task/polish.md
-      journal-fit:   static/fragments/task/journal-fit.md
-      qual-coding:   static/fragments/task/qual-coding.md
-      theory-framework: static/fragments/task/theory-framework.md
-    multi: true
+routing: {
+  "search": {
+    "triggers": ["学术文献检索、研究趋势或引文追踪"],
+    "exclusions": ["通用网页、新闻、天气或代码文档搜索"],
+    "fragment": "static/fragments/task/search.md",
+    "commands": ["search", "batch-search", "citations", "trends"],
+    "capabilities": ["public_api_search", "base_search", "cnki_research", "citation_network", "session_analysis"],
+    "references": ["references/api-search-best-practices.md", "references/search/api-sources-and-ranking.md", "references/search/filtering-and-pagination.md", "references/search/recipes-and-operations.md", "references/core-journals.md", "references/error-codes.md"]
+  },
+  "download": {
+    "triggers": ["OA 或合法 CNKI 全文、详情与下载"],
+    "exclusions": ["绕过付费墙、验证码或机构认证"],
+    "fragment": "static/fragments/task/download.md",
+    "commands": ["download", "batch-download", "detail", "auth-cnki", "read-detail"],
+    "capabilities": ["cnki_research", "oa_doi_download"],
+    "references": ["references/environment.md", "references/error-codes.md", "references/workflows.md", "static/core/sandbox-escalation.md"]
+  },
+  "review-write": {
+    "triggers": ["课题库、综述证据、选题假设与证据校验"],
+    "exclusions": ["不核对原文的出版级综述或研究空白结论"],
+    "fragment": "static/fragments/task/review-write.md",
+    "commands": ["projects", "library", "review", "write", "validate", "topics"],
+    "capabilities": ["session_analysis", "evidence_scaffolding"],
+    "references": ["references/workflows.md", "references/workflows/retrieval-and-writing.md", "references/workflows/revision-and-analysis.md", "references/error-codes.md"]
+  },
+  "citation": {
+    "triggers": ["参考文献、BibTeX、RIS 与题录导入导出"],
+    "exclusions": ["凭记忆补造缺失书目信息"],
+    "fragment": "static/fragments/task/citation.md",
+    "commands": ["cite", "export", "import"],
+    "capabilities": ["bibliography"],
+    "references": ["references/workflows.md", "references/workflows/retrieval-and-writing.md", "references/error-codes.md"]
+  },
+  "docx": {
+    "triggers": ["学术 Word、论文读取、PDF 元数据与文档补丁"],
+    "exclusions": ["合同、通知、简历等普通办公文档"],
+    "fragment": "static/fragments/task/docx.md",
+    "commands": ["read-paper", "pdf-meta", "write-docx", "patch-docx"],
+    "capabilities": ["document_io"],
+    "references": ["references/workflows.md", "references/workflows/retrieval-and-writing.md", "references/workflows/revision-and-analysis.md", "references/environment.md", "references/error-codes.md"]
+  },
+  "format": {
+    "triggers": ["论文格式 profile、检查与套用"],
+    "exclusions": ["捏造学校或期刊未提供的格式要求"],
+    "fragment": "static/fragments/task/format.md",
+    "commands": ["format-profile", "format-check", "format-apply"],
+    "capabilities": ["thesis_format"],
+    "references": ["references/error-codes.md"]
+  },
+  "blind-review": {
+    "triggers": ["有边界的模拟盲审与送审信号"],
+    "exclusions": ["官方盲审、答辩或学术不端结论"],
+    "fragment": "static/fragments/task/blind-review.md",
+    "commands": ["review-rubric", "review-signals"],
+    "capabilities": ["blind_review"],
+    "references": ["references/error-codes.md"]
+  },
+  "source-citation": {
+    "triggers": ["古籍、档案、方志、碑刻、报刊等史料引用"],
+    "exclusions": ["推断用户未提供的版本、卷次或档号"],
+    "fragment": "static/fragments/task/source-citation.md",
+    "commands": ["cite-source-template", "cite-source"],
+    "capabilities": ["historical_source_citation"],
+    "references": ["references/error-codes.md"]
+  },
+  "polish": {
+    "triggers": ["中文学术表达诊断与保原意润色"],
+    "exclusions": ["查重百分比、规避检测或自动改写承诺"],
+    "fragment": "static/fragments/task/polish.md",
+    "commands": ["polish-signals"],
+    "capabilities": ["academic_polishing"],
+    "references": ["references/workflows.md", "references/workflows/revision-and-analysis.md", "references/error-codes.md"]
+  },
+  "journal-fit": {
+    "triggers": ["期刊硬性规则与匿名泄露自查"],
+    "exclusions": ["录用概率、期刊质量或编辑部决定"],
+    "fragment": "static/fragments/task/journal-fit.md",
+    "commands": ["journal-profile", "journal-check"],
+    "capabilities": ["journal_preflight"],
+    "references": ["references/error-codes.md"]
+  },
+  "qual-coding": {
+    "triggers": ["编码簿关键词或正则命中与共现统计"],
+    "exclusions": ["把规则命中冒充语义开放编码或理论饱和"],
+    "fragment": "static/fragments/task/qual-coding.md",
+    "commands": ["qual-codebook-template", "qual-code"],
+    "capabilities": ["qualitative_coding"],
+    "references": ["references/error-codes.md"]
+  },
+  "theory-framework": {
+    "triggers": ["社会科学理论目录与关键词候选匹配"],
+    "exclusions": ["把关键词重叠分数当作理论适配结论"],
+    "fragment": "static/fragments/task/theory-framework.md",
+    "commands": ["theory-catalog", "theory-match"],
+    "capabilities": ["theory_framework"],
+    "references": ["references/theory-frameworks.md", "references/error-codes.md"]
+  },
+  "operations": {
+    "triggers": ["环境自检、缓存清理或预定义工作流"],
+    "exclusions": ["把连接器存在解释为 live 服务已验证"],
+    "fragment": "static/core/python-discovery.md",
+    "commands": ["check", "clean-cache", "workflows"],
+    "capabilities": ["operations"],
+    "references": ["references/environment.md", "references/error-codes.md"]
+  }
+}
 
 on_demand:
   capability-contract: evals/capability-contract.json
@@ -37,4 +123,6 @@ on_demand:
   workflows:      references/workflows.md
   api-best:       references/api-search-best-practices.md
   environment:    references/environment.md
+  configuration:  references/configuration.md
+  interaction:    references/interaction-and-sessions.md
   sandbox:        static/core/sandbox-escalation.md

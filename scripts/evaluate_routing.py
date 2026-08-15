@@ -16,6 +16,20 @@ from typing import Any, Dict, Iterable
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _routing_cases(data: Dict[str, Any]) -> list:
+    return list(data.get("cases", [])) + list(
+        data.get("extended_cases", [])
+    )
+
+
+def _portable_path(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return str(resolved.relative_to(ROOT))
+    except ValueError:
+        return str(resolved)
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -58,11 +72,11 @@ def build_evaluation_request(
         "schema_version": 1,
         "evaluation_type": "independent_semantic_routing",
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "case_count": len(cases.get("cases", [])),
+        "case_count": len(_routing_cases(cases)),
         "inputs": {
-            "skill_path": str(skill_path.resolve()),
-            "cases_path": str(cases_path.resolve()),
-            "rubric_path": str(rubric_path.resolve()),
+            "skill_path": _portable_path(skill_path),
+            "cases_path": _portable_path(cases_path),
+            "rubric_path": _portable_path(rubric_path),
             "skill_sha256": _sha256(skill_path),
             "cases_sha256": _sha256(cases_path),
             "rubric_sha256": _sha256(rubric_path),
@@ -146,7 +160,7 @@ def validate_external_results(
         for key in payload_hashes
     ):
         raise ValueError("routing request payload does not match input hashes")
-    cases = json.loads(payload["cases_json"])["cases"]
+    cases = _routing_cases(json.loads(payload["cases_json"]))
     expected = {case["id"]: case for case in cases}
     reviewed = {item["id"]: item for item in _read_jsonl(results_path)}
     if set(reviewed) != set(expected):
