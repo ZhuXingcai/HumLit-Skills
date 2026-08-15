@@ -41,6 +41,15 @@ def _line_count(path: Path) -> int:
     return len(path.read_text(encoding="utf-8").splitlines())
 
 
+def _relative_path(path: Path, root: Path) -> str:
+    return path.relative_to(root).as_posix()
+
+
+def _text_sha256(path: Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def validate_context_budget(
     *,
     skill_path: Path,
@@ -158,7 +167,7 @@ def _broken_markdown_links(root: Path) -> List[str]:
             resolved = (path.parent / relative).resolve()
             if not resolved.exists():
                 errors.append(
-                    f"{path.relative_to(root)} links to missing {target}"
+                    f"{_relative_path(path, root)} links to missing {target}"
                 )
     return errors
 
@@ -227,7 +236,7 @@ def _validate_routes(
                 )
 
     expected_fragments = {
-        str(path.relative_to(root))
+        _relative_path(path, root)
         for path in (root / "static" / "fragments" / "task").glob("*.md")
     }
     missing_fragments = expected_fragments - routed_fragments
@@ -255,7 +264,7 @@ def _validate_content_index(
         indexed.update(route.references)
 
     content_files = {
-        str(path.relative_to(root))
+        _relative_path(path, root)
         for directory in ("static", "references")
         for path in (root / directory).rglob("*.md")
     }
@@ -269,7 +278,7 @@ def _validate_content_index(
         ).is_file():
             errors.append(f"indexed content is missing: {relative}")
     oversized = [
-        (str(path.relative_to(root)), _line_count(path))
+        (_relative_path(path, root), _line_count(path))
         for path in sorted((root / "references").rglob("*.md"))
         if _line_count(path) > 180
     ]
@@ -299,11 +308,13 @@ def _validate_fragment_sections(root: Path) -> List[str]:
         ]
         if missing:
             errors.append(
-                f"{path.relative_to(root)} missing standard sections: {missing}"
+                f"{_relative_path(path, root)} "
+                f"missing standard sections: {missing}"
             )
         elif positions != sorted(positions):
             errors.append(
-                f"{path.relative_to(root)} standard sections are out of order"
+                f"{_relative_path(path, root)} "
+                "standard sections are out of order"
             )
     return errors
 
@@ -371,15 +382,11 @@ def _validate_independent_evaluation(root: Path) -> List[str]:
             )
     inputs = summary.get("inputs") or {}
     current = {
-        "skill_sha256": hashlib.sha256(
-            (root / "SKILL.md").read_bytes()
-        ).hexdigest(),
-        "cases_sha256": hashlib.sha256(
-            (root / "evals" / "skill-routing-cases.json").read_bytes()
-        ).hexdigest(),
-        "rubric_sha256": hashlib.sha256(
-            (root / "evals" / "README.md").read_bytes()
-        ).hexdigest(),
+        "skill_sha256": _text_sha256(root / "SKILL.md"),
+        "cases_sha256": _text_sha256(
+            root / "evals" / "skill-routing-cases.json"
+        ),
+        "rubric_sha256": _text_sha256(root / "evals" / "README.md"),
     }
     for key, digest in current.items():
         if inputs.get(key) != digest:
@@ -387,9 +394,7 @@ def _validate_independent_evaluation(root: Path) -> List[str]:
     result_path = root / str(summary.get("artifact", ""))
     if not result_path.is_file():
         errors.append("independent routing result artifact is missing")
-    elif summary.get("results_sha256") != hashlib.sha256(
-        result_path.read_bytes()
-    ).hexdigest():
+    elif summary.get("results_sha256") != _text_sha256(result_path):
         errors.append("independent routing result hash mismatch")
     return errors
 

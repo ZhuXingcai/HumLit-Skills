@@ -7,4 +7,4 @@
 - 任务 2：manifest 单一真源；SKILL 68 行、always-load 78 行、pre-task 146 行/5628 字符。
 - 任务 3：12 fragment 标准化，参考文档分片，48 案例和 Live Canary 分流完成。
 - 独立评测：gpt-5.5-2026-04-24，只读会话，48 条三项准确率均为 100%。
-- 验收：305 passed、9 skipped；offline 5/5；真实 semantic=conditional；wheel 安装通过；核心 diff=0。
+- 验收：306 passed、9 skipped；offline 5/5；真实 semantic=conditional；wheel 安装通过；核心 diff=0。

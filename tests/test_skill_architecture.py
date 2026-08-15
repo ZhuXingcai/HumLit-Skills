@@ -8,7 +8,10 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from smoke_test import classify_live_status, summarize_checks  # noqa: E402
-from verify_skill_architecture import validate_repository  # noqa: E402
+from verify_skill_architecture import (  # noqa: E402
+    _text_sha256,
+    validate_repository,
+)
 
 
 def test_repository_skill_architecture_is_consistent():
@@ -22,6 +25,15 @@ def test_repository_skill_architecture_is_consistent():
     assert report.stats["positive_cases"] == 24
     assert report.stats["negative_cases"] == 12
     assert report.stats["ambiguous_cases"] == 12
+
+
+def test_evidence_hash_ignores_platform_line_endings(tmp_path):
+    lf_path = tmp_path / "lf.md"
+    crlf_path = tmp_path / "crlf.md"
+    lf_path.write_bytes(b"first\nsecond\n")
+    crlf_path.write_bytes(b"first\r\nsecond\r\n")
+
+    assert _text_sha256(lf_path) == _text_sha256(crlf_path)
 
 
 def test_semantic_rate_limit_without_key_is_conditional():

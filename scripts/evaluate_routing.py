@@ -25,13 +25,14 @@ def _routing_cases(data: Dict[str, Any]) -> list:
 def _portable_path(path: Path) -> str:
     resolved = path.resolve()
     try:
-        return str(resolved.relative_to(ROOT))
+        return resolved.relative_to(ROOT).as_posix()
     except ValueError:
-        return str(resolved)
+        return resolved.as_posix()
 
 
 def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    text = path.read_text(encoding="utf-8")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _atomic_json_write(path: Path, data: Dict[str, Any]) -> None:
