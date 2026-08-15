@@ -31,8 +31,7 @@ def _portable_path(path: Path) -> str:
 
 
 def _sha256(path: Path) -> str:
-    text = path.read_text(encoding="utf-8")
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _atomic_json_write(path: Path, data: Dict[str, Any]) -> None:
