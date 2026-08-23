@@ -10,6 +10,11 @@ if str(SCRIPTS) not in sys.path:
 from register_skill import register_skill  # noqa: E402
 
 
+def _is_directory_link(path):
+    is_junction = getattr(path, "is_junction", lambda: False)
+    return path.is_symlink() or is_junction()
+
+
 def test_registers_one_checkout_for_multiple_clients(tmp_path):
     source = tmp_path / "source"
     source.mkdir()
@@ -22,7 +27,7 @@ def test_registers_one_checkout_for_multiple_clients(tmp_path):
     assert result["registered"] == 3
     for relative in (".codex/skills", ".claude/skills", ".trae-cn/skills"):
         target = home / relative / "humlit-skills"
-        assert target.is_symlink()
+        assert _is_directory_link(target)
         assert target.resolve() == source.resolve()
 
 
