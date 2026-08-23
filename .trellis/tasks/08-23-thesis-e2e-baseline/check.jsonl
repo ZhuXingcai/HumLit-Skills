@@ -1,0 +1,7 @@
+{"file":".trellis/spec/backend/index.md","reason":"Review against project-wide CLI contracts."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Check honest status/error/evidence reporting."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Check no private or persistent user artifacts were committed."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Check stdout JSON purity and diagnostic privacy."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Run required tests and repository gates."}
+{"file":"DEVELOPMENT.md","reason":"Check handoff and end-to-end trial documentation."}
+{"file": ".trellis/tasks/08-23-thesis-e2e-baseline/research/baseline-results.md", "reason": "Verify reported results and privacy boundaries against actual commands."}

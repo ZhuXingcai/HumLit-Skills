@@ -1,0 +1,8 @@
+{"file":".trellis/spec/backend/index.md","reason":"Project-wide Python CLI contracts and required pre-development guides."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Place trial helpers, fixtures, and tests in existing module boundaries."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Preserve JSON status, source boundaries, and human-verification limits."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Keep trial state and artifacts file-backed, atomic, temporary, and private."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Prevent private document content and incidental output from polluting CLI JSON."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Apply pytest, architecture, smoke, fixture, and academic-safety gates."}
+{"file":"DEVELOPMENT.md","reason":"Follow cross-device handoff and real-material trial rules."}
+{"file": ".trellis/tasks/08-23-thesis-e2e-baseline/research/baseline-results.md", "reason": "Observed baseline, real-DOCX boundaries, Windows registration defect, and next actions."}
