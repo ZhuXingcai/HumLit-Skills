@@ -127,6 +127,14 @@ def cmd_search(args):
                 if source == "cnki":
                     # 增强错误信息
                     enhanced_error = _enhance_error(cnki_results[0], {"query": args.query})
+                    source_error = {
+                        "status": "error",
+                        "code": cnki_results[0].get("code", "CNKI_SEARCH_FAILED"),
+                        "message": cnki_results[0].get("message", "知网搜索失败"),
+                    }
+                    if cnki_results[0].get("diagnostics"):
+                        source_error["diagnostics"] = cnki_results[0]["diagnostics"]
+                    enhanced_error["source_statuses"] = {"cnki": source_error}
                     _output(enhanced_error)
                     if reuse_driver:
                         try: reuse_driver.quit()
@@ -139,6 +147,8 @@ def cmd_search(args):
                     "code": cnki_error.get("code", "CNKI_SEARCH_FAILED"),
                     "message": cnki_error.get("message", "知网搜索失败"),
                 }
+                if cnki_error.get("diagnostics"):
+                    source_statuses["cnki"]["diagnostics"] = cnki_error["diagnostics"]
             else:
                 source_statuses["cnki"] = {"status": "empty", "count": 0}
 

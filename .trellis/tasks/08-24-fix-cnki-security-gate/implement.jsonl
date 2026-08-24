@@ -1,0 +1,7 @@
+{"file":".trellis/spec/backend/index.md","reason":"定位本任务适用的 backend 规范与开发检查单"}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"约束 CNKI core、CLI 与测试的职责边界"}
+{"file":".trellis/spec/backend/error-handling.md","reason":"确保验证码、页面异常与空结果使用诚实的结构化状态"}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"保持 stdout 单一 JSON，并将安全诊断限制在 stderr/结构化字段"}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"执行回归测试、完整门禁和学术检索证据边界"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"检查 driver 页面状态到 core 搜索再到 CLI source_statuses 的传播链"}
+{"file":".trellis/tasks/08-24-fix-cnki-security-gate/research/cnki-failure-analysis.md","reason":"提供真实失败证据、根因假设与修复边界"}

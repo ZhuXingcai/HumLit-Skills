@@ -44,6 +44,16 @@ class DriverStartupError(RuntimeError):
         self.message = message
 
 
+class CnkiSecurityError(RuntimeError):
+    """Structured failure for unresolved CNKI security verification state."""
+
+    def __init__(self, code: str, message: str, diagnostics: Optional[dict] = None):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.diagnostics = diagnostics or {}
+
+
 def _detect_browser() -> str:
     """检测可用浏览器，优先 Edge。支持 HUMLIT_BROWSER / config.json 强制指定。"""
     try:
@@ -1085,21 +1095,64 @@ def authenticate_cnki(
 
 def _is_cnki_security_gate(driver: "webdriver.Remote") -> bool:
     """知网在访问检索页前可能跳转到滑块等安全验证页。
-    仅通过 URL 和页面标题判断，不检查 body text（正常页面的页脚/脚本
-    常含"安全验证"等词汇，会导致误报）。
+    URL、标题和少量明确的挑战页 DOM 文案共同判断。不能只看 URL 是否离开
+    `/verify/`，因为知网可能先跳到带 `captchaId` 的中间页面。
     """
     try:
         url = driver.current_url or ""
         title = (driver.title or "").strip()
     except Exception:
         return False
-    if "/verify/" in url:
+    if "/verify/" in url or re.search(r"[?&]captchaid=", url, re.IGNORECASE):
         return True
     gate_keywords = ("安全验证", "安全检查", "请完成验证", "人机验证")
     for kw in gate_keywords:
         if kw in title:
             return True
+    try:
+        body_text = driver.execute_script(
+            "return (document.body && document.body.innerText || '').substring(0, 3000);"
+        ) or ""
+    except Exception:
+        body_text = ""
+    body_markers = (
+        "拖动下方拼图完成验证",
+        "请向右滑动",
+        "滑动验证",
+        "点击验证",
+    )
+    if any(marker in body_text for marker in body_markers):
+        return True
     return False
+
+
+def _cnki_page_diagnostics(driver: "webdriver.Remote") -> dict:
+    """Collect bounded, non-sensitive page state for structured failures."""
+    try:
+        url = driver.current_url or ""
+    except Exception:
+        url = ""
+    try:
+        title = (driver.title or "").strip()
+    except Exception:
+        title = ""
+    try:
+        body = driver.execute_script(
+            "return (document.body && document.body.innerText || '').substring(0, 1000);"
+        ) or ""
+    except Exception:
+        body = ""
+    return {
+        "url": url.split("?", 1)[0],
+        "title": title,
+        "has_captcha_id": bool(re.search(r"[?&]captchaid=", url, re.IGNORECASE)),
+        "security_gate": _is_cnki_security_gate(driver),
+        "captcha_elements": _has_captcha_elements(driver),
+        "body_markers": {
+            marker: marker in body
+            for marker in ("暂无数据", "请稍后重试", "安全验证", "拖动下方拼图完成验证")
+        },
+    }
 
 
 def _show_browser_for_captcha(
@@ -1113,7 +1166,7 @@ def _show_browser_for_captcha(
     _show_browser(driver)
 
     initial_url = driver.current_url or ""
-    was_gate = "/verify/" in initial_url
+    was_gate = _is_cnki_security_gate(driver)
 
     _log(f"\n[!] {prompt}")
     _log(f"    正在自动等待验证完成（最长 {poll_timeout} 秒）...\n")
@@ -1122,6 +1175,7 @@ def _show_browser_for_captcha(
     poll_count = 0
     clean_count = 0
     verified = False
+    left_initial_gate_logged = False
 
     while time.time() < deadline:
         time.sleep(3)
@@ -1129,21 +1183,20 @@ def _show_browser_for_captcha(
         try:
             current_url = driver.current_url or ""
 
-            if was_gate and "/verify/" not in current_url:
-                _log(f"[OK] 已离开验证页 → {current_url[:80]}")
-                verified = True
-                break
-
             on_gate = _is_cnki_security_gate(driver)
             has_elements = _has_captcha_elements(driver)
 
             if poll_count % 5 == 0:
                 _log(f"[cnki] 轮询 #{poll_count}: gate={on_gate}, elements={has_elements}")
 
+            if was_gate and "/verify/" not in current_url and not left_initial_gate_logged:
+                _log(f"[cnki] 已离开初始验证 URL，继续确认页面状态 → {current_url[:80]}")
+                left_initial_gate_logged = True
+
             if not on_gate and not has_elements:
                 clean_count += 1
                 if clean_count >= 2:
-                    _log("[OK] 连续无验证码检出，验证完成")
+                    _log("[OK] 连续无安全验证检出，验证完成")
                     verified = True
                     break
             else:
@@ -1159,9 +1212,12 @@ def _show_browser_for_captcha(
         return driver
 
     _show_browser(driver)
-    raise RuntimeError(
+    diagnostics = _cnki_page_diagnostics(driver)
+    raise CnkiSecurityError(
+        "CNKI_SECURITY_GATE_TIMEOUT",
         "知网人机验证超时，浏览器窗口已保持在前台。"
-        "请先在该窗口完成验证，然后重新执行命令。"
+        "请先在该窗口完成验证，然后重新执行命令。",
+        diagnostics,
     )
 
 
@@ -1265,9 +1321,11 @@ def _handle_captcha(driver: "webdriver.Remote") -> "webdriver.Remote":
 
         return driver
 
+    except CnkiSecurityError:
+        raise
     except Exception as e:
-        try:
-            driver.title
-            return driver
-        except Exception:
-            raise RuntimeError(f"验证码处理失败且浏览器会话已丢失: {e}")
+        raise CnkiSecurityError(
+            "CNKI_CAPTCHA_HANDLING_FAILED",
+            f"验证码处理失败: {e}",
+            _cnki_page_diagnostics(driver),
+        ) from e

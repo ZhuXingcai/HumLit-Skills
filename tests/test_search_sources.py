@@ -162,6 +162,94 @@ def test_single_source_failure_is_not_reported_as_no_results(monkeypatch, tmp_pa
     assert result["source_statuses"]["openalex"]["status"] == "error"
 
 
+def test_cnki_failure_diagnostics_are_preserved_in_all_source_status(monkeypatch, tmp_path):
+    diagnostics = {
+        "url": "https://kns.cnki.net/kns8s/search",
+        "security_gate": True,
+    }
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(search_cmd, "_cnki_cache_get", lambda args: None)
+    monkeypatch.setattr(
+        search_cmd,
+        "search_openalex",
+        lambda *args, **kwargs: [{"title": "API result", "source": "OpenAlex"}],
+    )
+    for name in (
+        "search_semantic_scholar",
+        "search_arxiv",
+        "search_nssd",
+        "search_dblp",
+    ):
+        monkeypatch.setattr(search_cmd, name, lambda *args, **kwargs: [])
+
+    import core.cnki
+    monkeypatch.setattr(
+        core.cnki,
+        "search_cnki",
+        lambda **kwargs: [{
+            "status": "error",
+            "code": "CNKI_SECURITY_GATE_UNRESOLVED",
+            "message": "verification unresolved",
+            "diagnostics": diagnostics,
+        }],
+    )
+
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="command")
+    search_cmd.add_parser(sub)
+    args = parser.parse_args(["search", "topic", "--source", "all"])
+
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout):
+        args.func(args)
+
+    result = json.loads(stdout.getvalue())
+    assert result["status"] == "partial"
+    assert result["source_statuses"]["cnki"] == {
+        "status": "error",
+        "code": "CNKI_SECURITY_GATE_UNRESOLVED",
+        "message": "verification unresolved",
+        "diagnostics": diagnostics,
+    }
+
+
+def test_cnki_single_source_failure_includes_source_status(monkeypatch, tmp_path):
+    diagnostics = {"security_gate": True}
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(search_cmd, "_cnki_cache_get", lambda args: None)
+    import core.cnki
+    monkeypatch.setattr(
+        core.cnki,
+        "search_cnki",
+        lambda **kwargs: [{
+            "status": "error",
+            "code": "CNKI_SECURITY_GATE_TIMEOUT",
+            "message": "verification timed out",
+            "diagnostics": diagnostics,
+        }],
+    )
+
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="command")
+    search_cmd.add_parser(sub)
+    args = parser.parse_args(["search", "topic", "--source", "cnki"])
+
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout):
+        args.func(args)
+
+    result = json.loads(stdout.getvalue())
+    assert result["code"] == "CNKI_SECURITY_GATE_TIMEOUT"
+    assert result["source_statuses"]["cnki"] == {
+        "status": "error",
+        "code": "CNKI_SECURITY_GATE_TIMEOUT",
+        "message": "verification timed out",
+        "diagnostics": diagnostics,
+    }
+
+
 def test_async_search_forwards_filters_and_page(monkeypatch):
     calls = {}
 

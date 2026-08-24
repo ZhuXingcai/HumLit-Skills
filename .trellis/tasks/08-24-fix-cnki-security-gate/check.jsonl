@@ -1,0 +1,6 @@
+{"file":".trellis/spec/backend/index.md","reason":"按 backend Quality Check 入口复核改动"}
+{"file":".trellis/spec/backend/error-handling.md","reason":"验证所有失败分类不会误降级为 NO_RESULTS"}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"验证 stdout/stderr 与敏感信息边界"}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"运行定向、完整、架构和离线 smoke 门禁"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"复核页面状态、搜索返回和 CLI JSON 的跨层一致性"}
+{"file":".trellis/tasks/08-24-fix-cnki-security-gate/research/cnki-failure-analysis.md","reason":"将验证结果与原始失败证据逐项对照"}

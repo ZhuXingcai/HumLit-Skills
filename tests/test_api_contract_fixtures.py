@@ -223,3 +223,111 @@ def test_cnki_driver_provision_failure_is_structured(monkeypatch):
         "code": "DRIVER_MISSING",
         "message": "driver provisioning failed",
     }]
+
+
+def test_cnki_result_page_distinguishes_verified_empty_from_retry_page():
+    class Page:
+        current_url = "https://kns.cnki.net/kns8s/search"
+        title = "检索-中国知网"
+
+        def __init__(self, text):
+            self.text = text
+
+        def find_elements(self, *args):
+            return []
+
+        def execute_script(self, script):
+            return self.text
+
+    empty_page = Page("抱歉，暂无数据。")
+    retry_page = Page("抱歉，暂无数据，请稍后重试。拖动下方拼图完成验证")
+
+    assert cnki_search._classify_result_page(empty_page) == "verified_empty"
+    assert cnki_search._classify_result_page(retry_page) == "security_gate"
+
+
+def test_cnki_security_failure_preserves_structured_diagnostics(monkeypatch):
+    from core.cnki.driver import CnkiSecurityError
+
+    fake = type(
+        "Driver",
+        (),
+        {
+            "get": lambda self, url: None,
+            "quit": lambda self: None,
+            "current_url": "https://kns.cnki.net/kns8s/search",
+            "title": "检索-中国知网",
+        },
+    )()
+    diagnostics = {
+        "url": "https://kns.cnki.net/kns8s/search",
+        "security_gate": True,
+    }
+
+    monkeypatch.setattr(cnki_search, "check_cnki_access", lambda: (True, "ok"))
+    monkeypatch.setattr(cnki_search, "_detect_browser", lambda: "edge")
+    monkeypatch.setattr(cnki_search, "_create_driver", lambda **kwargs: fake)
+    monkeypatch.setattr(cnki_search, "_load_cookies", lambda driver: None)
+    monkeypatch.setattr(cnki_search, "_save_cookies", lambda driver: None)
+    monkeypatch.setattr(cnki_search.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        cnki_search,
+        "_handle_captcha",
+        lambda driver: (_ for _ in ()).throw(
+            CnkiSecurityError(
+                "CNKI_SECURITY_GATE_UNRESOLVED",
+                "verification unresolved",
+                diagnostics,
+            )
+        ),
+    )
+
+    result = cnki_search.search_cnki("人工智能")
+
+    assert result == [{
+        "status": "error",
+        "code": "CNKI_SECURITY_GATE_UNRESOLVED",
+        "message": "verification unresolved",
+        "diagnostics": diagnostics,
+    }]
+
+
+def test_cnki_batch_startup_security_failure_preserves_error_code(monkeypatch):
+    from core.cnki.driver import CnkiSecurityError
+
+    fake = type(
+        "Driver",
+        (),
+        {
+            "get": lambda self, url: None,
+            "quit": lambda self: None,
+        },
+    )()
+    diagnostics = {"security_gate": True}
+
+    monkeypatch.setattr(cnki_search, "check_cnki_access", lambda: (True, "ok"))
+    monkeypatch.setattr(cnki_search, "_detect_browser", lambda: "edge")
+    monkeypatch.setattr(cnki_search, "_create_driver", lambda **kwargs: fake)
+    monkeypatch.setattr(cnki_search, "_load_cookies", lambda driver: None)
+    monkeypatch.setattr(cnki_search, "_save_cookies", lambda driver: None)
+    monkeypatch.setattr(cnki_search.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        cnki_search,
+        "_handle_captcha",
+        lambda driver: (_ for _ in ()).throw(
+            CnkiSecurityError(
+                "CNKI_SECURITY_GATE_TIMEOUT",
+                "verification timed out",
+                diagnostics,
+            )
+        ),
+    )
+
+    result = cnki_search.batch_search_cnki(["人工智能"])
+
+    assert result == {
+        "status": "error",
+        "code": "CNKI_SECURITY_GATE_TIMEOUT",
+        "message": "verification timed out",
+        "diagnostics": diagnostics,
+    }

@@ -13,8 +13,9 @@ from .constants import (
 )
 from .driver import (
     _detect_browser, _create_driver, _load_cookies, _save_cookies,
-    _handle_captcha, check_cnki_access,
-    DriverStartupError,
+    _handle_captcha, _is_cnki_security_gate, _has_captcha_elements,
+    _cnki_page_diagnostics, check_cnki_access,
+    CnkiSecurityError, DriverStartupError,
 )
 
 if HAS_SELENIUM:
@@ -165,11 +166,29 @@ def search_cnki(
         try:
             WebDriverWait(driver, 15).until(
                 EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, "table.result-table-list, .result-table-list"))
+                    (By.CSS_SELECTOR, "table.result-table-list tbody tr, .result-table-list tbody tr, #gridTable tbody tr"))
             )
             _log("[cnki] 搜索结果已加载")
         except TimeoutException:
-            _log("[cnki] [!] 等待结果表格超时，尝试继续...")
+            _log("[cnki] [!] 等待结果表格超时，检查页面状态...")
+            page_state = _classify_result_page(driver)
+            if page_state == "security_gate":
+                raise CnkiSecurityError(
+                    "CNKI_SECURITY_GATE_UNRESOLVED",
+                    "知网搜索结果页仍处于安全验证状态，检索未完成",
+                    _cnki_page_diagnostics(driver),
+                )
+            if page_state != "verified_empty":
+                raise CnkiSecurityError(
+                    "CNKI_RESULT_PAGE_UNAVAILABLE",
+                    "知网结果表格未加载，且页面未提供可信的空结果状态",
+                    _cnki_page_diagnostics(driver),
+                )
+            _log("[cnki] 已确认知网返回真实空结果页面")
+            if _keep_driver:
+                should_quit = False
+                return [], driver
+            return []
 
         if doc_type:
             doc_type_ok = _switch_to_doc_type(driver, doc_type)
@@ -225,8 +244,12 @@ def search_cnki(
             return all_results, driver
         return all_results
 
-    except DriverStartupError as e:
-        return [{"status": "error", "code": e.code, "message": e.message}]
+    except (DriverStartupError, CnkiSecurityError) as e:
+        result = {"status": "error", "code": e.code, "message": e.message}
+        diagnostics = getattr(e, "diagnostics", None)
+        if diagnostics:
+            result["diagnostics"] = diagnostics
+        return [result]
     except Exception as e:
         return [{"status": "error", "code": "CNKI_SEARCH_FAILED",
                  "message": str(e)}]
@@ -304,6 +327,7 @@ def batch_search_cnki(
     driver = None
     all_results = []
     errors = []
+    empty_keywords = []
     core_filter_results: Dict[str, bool] = {}
 
     try:
@@ -357,13 +381,33 @@ def batch_search_cnki(
                 time.sleep(REQUEST_INTERVAL)
                 driver = _handle_captcha(driver)
 
+                verified_empty = False
                 try:
                     WebDriverWait(driver, 15).until(
                         EC.presence_of_element_located(
-                            (By.CSS_SELECTOR, "table.result-table-list, .result-table-list"))
+                            (By.CSS_SELECTOR, "table.result-table-list tbody tr, .result-table-list tbody tr, #gridTable tbody tr"))
                     )
                 except TimeoutException:
-                    _log(f"[cnki-batch] 等待结果超时: {keyword}")
+                    _log(f"[cnki-batch] 等待结果超时，检查页面状态: {keyword}")
+                    page_state = _classify_result_page(driver)
+                    if page_state == "security_gate":
+                        raise CnkiSecurityError(
+                            "CNKI_SECURITY_GATE_UNRESOLVED",
+                            f"知网搜索 '{keyword}' 仍处于安全验证状态，检索未完成",
+                            _cnki_page_diagnostics(driver),
+                        )
+                    if page_state != "verified_empty":
+                        raise CnkiSecurityError(
+                            "CNKI_RESULT_PAGE_UNAVAILABLE",
+                            f"知网搜索 '{keyword}' 的结果表格未加载，页面状态不可确认",
+                            _cnki_page_diagnostics(driver),
+                        )
+                    verified_empty = True
+                    empty_keywords.append(keyword)
+                    _log(f"[cnki-batch] {keyword}: 已确认真实空结果页面")
+
+                if verified_empty:
+                    continue
 
                 if doc_type and idx == 0:
                     if _switch_to_doc_type(driver, doc_type):
@@ -409,6 +453,14 @@ def batch_search_cnki(
                 all_results.extend(kw_results)
                 _log(f"[cnki-batch] {keyword}: 获取 {len(kw_results)} 条")
 
+            except CnkiSecurityError as e:
+                err_msg = f"搜索 '{keyword}' 失败: {e.message}"
+                _log(f"[cnki-batch] {err_msg}")
+                error = {"keyword": keyword, "code": e.code, "error": e.message}
+                if e.diagnostics:
+                    error["diagnostics"] = e.diagnostics
+                errors.append(error)
+                continue
             except Exception as e:
                 err_msg = f"搜索 '{keyword}' 失败: {e}"
                 _log(f"[cnki-batch] {err_msg}")
@@ -421,10 +473,12 @@ def batch_search_cnki(
         _log(f"\n[cnki-batch] 完成: 总计 {len(all_results)} 条, 去重/过滤后 {len(deduped)} 条, 错误 {len(errors)} 组")
 
         result: Dict[str, Any] = {
-            "status": "partial" if errors else "success",
+            "status": "partial" if errors else ("empty" if not deduped else "success"),
             "count": len(deduped),
             "results": deduped,
         }
+        if empty_keywords:
+            result["empty_keywords"] = empty_keywords
         if errors:
             result["errors"] = errors
         if core and core_filter_results:
@@ -436,6 +490,11 @@ def batch_search_cnki(
                 )
         return result
 
+    except CnkiSecurityError as e:
+        result = {"status": "error", "code": e.code, "message": e.message}
+        if e.diagnostics:
+            result["diagnostics"] = e.diagnostics
+        return result
     except Exception as e:
         return {"status": "error", "code": "CNKI_BATCH_FAILED",
                 "message": str(e)}
@@ -449,6 +508,33 @@ def batch_search_cnki(
 
 
 # ── 输入与筛选 ────────────────────────────────────────
+
+def _classify_result_page(driver) -> str:
+    """Classify CNKI result page without confusing retry/security pages with empty."""
+    if _is_cnki_security_gate(driver) or _has_captcha_elements(driver):
+        return "security_gate"
+    try:
+        tables = driver.find_elements(
+            By.CSS_SELECTOR, "table.result-table-list, .result-table-list, #gridTable"
+        )
+        rows = driver.find_elements(
+            By.CSS_SELECTOR,
+            "table.result-table-list tbody tr, .result-table-list tbody tr, #gridTable tbody tr",
+        )
+        if tables and rows:
+            return "results"
+        body_text = driver.execute_script(
+            "return (document.body && document.body.innerText || '').substring(0, 5000);"
+        ) or ""
+    except Exception:
+        return "unknown"
+
+    empty_markers = ("暂无数据", "暂无相关数据", "未检索到相关结果", "没有找到相关结果")
+    retry_markers = ("请稍后重试", "系统繁忙", "访问异常", "安全验证")
+    if any(marker in body_text for marker in empty_markers):
+        if not any(marker in body_text for marker in retry_markers):
+            return "verified_empty"
+    return "unknown"
 
 def _input_search_keyword(driver, keyword: str):
     """在知网搜索页面输入关键词并提交"""

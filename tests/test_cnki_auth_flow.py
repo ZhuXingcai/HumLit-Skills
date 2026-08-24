@@ -114,6 +114,39 @@ class CnkiAuthFlowTests(unittest.TestCase):
         fake.current_url = "https://kns.cnki.net/"
         self.assertTrue(driver._has_cnki_institution_access(fake, institution="Example University"))
 
+    def test_security_gate_detects_captcha_id_intermediate_url(self):
+        fake = FakeDriver(text="")
+        fake.current_url = "https://kns.cnki.net/kns8s/search?captchaId=challenge"
+
+        self.assertTrue(driver._is_cnki_security_gate(fake))
+
+    def test_security_gate_detects_slider_text_on_search_page(self):
+        fake = FakeDriver(text="抱歉，暂无数据，请稍后重试。拖动下方拼图完成验证")
+
+        self.assertTrue(driver._is_cnki_security_gate(fake))
+
+    def test_captcha_timeout_is_structured_and_not_swallowed(self):
+        fake = FakeDriver()
+        fake.current_url = "https://kns.cnki.net/verify/challenge"
+
+        with patch.object(driver, "_show_browser"), \
+             patch.object(driver, "_save_cookies"):
+            with self.assertRaises(driver.CnkiSecurityError) as raised:
+                driver._show_browser_for_captcha(fake, poll_timeout=0)
+
+        self.assertEqual(raised.exception.code, "CNKI_SECURITY_GATE_TIMEOUT")
+
+    def test_handle_captcha_propagates_security_timeout(self):
+        fake = FakeDriver()
+        error = driver.CnkiSecurityError("CNKI_SECURITY_GATE_TIMEOUT", "verification timed out")
+
+        with patch.object(driver, "_is_cnki_security_gate", return_value=True), \
+             patch.object(driver, "_show_browser_for_captcha", side_effect=error):
+            with self.assertRaises(driver.CnkiSecurityError) as raised:
+                driver._handle_captcha(fake)
+
+        self.assertEqual(raised.exception.code, "CNKI_SECURITY_GATE_TIMEOUT")
+
     def test_cmd_auth_cnki_outputs_json_and_passes_generic_options(self):
         with patch.object(
             core.cnki,

@@ -10,6 +10,10 @@ Agent 根据此表决定如何回应用户。
 | `CNKI_UNREACHABLE` | 无法连接知网 | 提示检查校园网/VPN |
 | `CNKI_AUTH_FAILED` | 知网校外认证流程异常 | 展示 `message` 和认证入口，提示用户检查 `--auth-url`、`--institution`、`--direct-domain`，并在浏览器中完成学校登录/验证码后重试 |
 | `CNKI_SEARCH_FAILED` | 搜索过程异常 | 提示网络问题，建议稍后重试 |
+| `CNKI_SECURITY_GATE_TIMEOUT` | 知网安全验证等待超时 | 保留浏览器窗口，提示用户手动完成验证后重试；不得解释为无结果 |
+| `CNKI_SECURITY_GATE_UNRESOLVED` | 搜索结果页仍处于安全验证状态 | 展示脱敏诊断并停止本来源，不得降级为 `empty` |
+| `CNKI_CAPTCHA_HANDLING_FAILED` | 验证码状态检测或处理异常 | 展示脱敏诊断，检查页面改版/浏览器会话后重试 |
+| `CNKI_RESULT_PAGE_UNAVAILABLE` | 结果表格未加载且无法确认真实空结果 | 视为页面/解析失败，检查 CNKI 状态或更新选择器，不得输出 `NO_RESULTS` |
 | `CNKI_BATCH_FAILED` | 批量搜索异常 | 同上 |
 | `CNKI_DETAIL_FAILED` | 获取论文详情失败 | 提示网络问题或该论文页面结构异常 |
 | `CNKI_DOWNLOAD_FAILED` | 下载失败 | 提示手动下载或检查网络 |
