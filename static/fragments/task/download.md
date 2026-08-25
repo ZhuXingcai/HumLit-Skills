@@ -26,7 +26,7 @@ DOI OA 需要网络；CNKI 需要本地浏览器、Driver 和用户合法机构�
 |------|------|----------|
 | `read-detail` | 获取摘要/全文（CNKI 论文，含硕博论文） | `--top-n` `--indices` `--fulltext` `--project` |
 | `detail "url"` | 单篇详情 | |
-| `auth-cnki` | 校外认证/会话预热 | `--auth-url` `--verify-url` `--institution` `--wait-seconds` `--captcha-timeout` `--direct-domain` `--keep-browser` `--force` |
+| `auth-cnki` | 校外认证/会话预热 | `--auth-url` `--verify-url` `--institution` `--wait-seconds` `--captcha-timeout` `--direct-domain` `--keep-browser` `--force` `--reuse-session` |
 | `download [url]` | CNKI URL 下载，或 DOI 解析并实际保存 OA PDF | `--dir` `--doi` `--file-format` `--link-only` |
 | `batch-download [url1 url2 ...]` | 批量下载（推荐） | `--from-session` `--top-n` `--dir` `--file-format` `--fallback-format` `--citation-style` `--report-output` `--project` |
 
@@ -63,11 +63,15 @@ DOI OA 需要网络；CNKI 需要本地浏览器、Driver 和用户合法机构�
 ## 校外访问知网
 
 用户在校外、VPN/CARSI/学校统一认证环境下要使用知网时，优先运行 `auth-cnki` 预热会话，而不是让用户自己猜浏览器状态：
-- 不绑定具体学校。`--auth-url` 可传 CNKI FSSO、学校图书馆入口、VPN 入口或 CARSI 入口；`--institution` 可选，用于在 FSSO 页面自动选择机构，不传则让用户手动选择
-- 运行前向用户明示：浏览器会打开；需要手动登录、扫码、短信、滑块等验证；不要关闭浏览器窗口；脚本会等待并自动保存 cookies/profile
+- 不绑定具体学校。`--auth-url` 可传 CNKI FSSO、学校图书馆入口、VPN 入口或 CARSI 入口；`--institution` 只有用户明确提供时才使用，不传则让用户手动选择。Agent 不得从论文、路径、历史对话或本地文档推断学校并代填该参数
+- `auth-cnki` 默认不复用已有认证，首次使用或更换用户时会要求在浏览器中手动选择机构并登录；只有用户明确传入 `--reuse-session` 才检查并复用本机已有会话。成功认证后，后续 `search` / `read-detail` / `download` 可复用本地 `.humlit/` 状态
+- 运行前向用户明示：浏览器会打开；需要手动登录、扫码、短信、滑块等验证；不要关闭浏览器窗口；安全验证期间窗口保持可见，脚本会等待并自动保存 cookies/profile
 - 如果用户使用 Clash/Mihomo/Surge/Quantumult X/PAC/系统代理等，询问或识别需要直连的学校认证域名，用 `--direct-domain` 传入；脚本会追加 CNKI/CARSI 直连域名，但 TUN/全局接管仍需要用户在代理软件里配置 DIRECT 规则
-- 如果 `auth-cnki` 返回 `already_authenticated: true` 或 `access_confirmed: true`，同一项目后续 `search` / `read-detail` / `download` 直接复用 `.humlit/browser-profile` 和 cookies，非必要不要重复要求用户登录
-- 如果返回 `warning` 且 `access_confirmed: false`，展示 `diagnostics.page.url/title`，提示用户浏览器可能还停在学校登录页或验证页；可用 `--keep-browser` 保留窗口继续手动处理
+- 如果 `auth-cnki` 返回 `already_authenticated: true`，说明用户明确选择了 `--reuse-session`；如果返回 `access_confirmed: true`，说明本次手动认证成功。两种情况下，同一项目后续 `search` / `read-detail` / `download` 可复用 `.humlit/browser-profile` 和 cookies
+- 认证只是前置步骤，不是用户“检索/下载”任务的完成条件。认证成功后必须在同一轮继续执行用户原先要求的 `search` / `batch-search` / `read-detail` / `download`，除非用户明确只要求测试登录
+- 已经完成过本机认证后，不得再次使用 `--force` 或重新运行默认 `auth-cnki`。后续命令直接复用 `.humlit/` 状态；只有检索明确报告认证失效，才请求用户重新登录
+- 如果 `auth-cnki` 返回安全验证超时，但用户确认可见浏览器已登录且窗口仍保留，先直接执行一次原定检索，让检索页状态作最终判定；不得循环启动新的认证窗口。只有检索也明确返回认证/安全门错误时才再次人工介入
+- 如果返回 `warning` 且 `access_confirmed: false`，展示脱敏后的 `diagnostics.page.url/title`。若用户尚未完成登录，继续等待现有窗口；若用户已确认登录，则直接尝试原定检索，不要重启认证
 
 ## 超时设置
 

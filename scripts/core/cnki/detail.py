@@ -15,7 +15,7 @@ from .constants import (
 from core.paths import state_path
 from .driver import (
     _detect_browser, _create_driver, _load_cookies, _save_cookies,
-    _handle_captcha,
+    _handle_captcha, _driver_is_reused,
 )
 
 if HAS_SELENIUM:
@@ -56,7 +56,8 @@ def get_detail(url: str) -> Dict[str, Any]:
         if driver is not None:
             try:
                 _save_cookies(driver)
-                driver.quit()
+                if not _driver_is_reused(driver):
+                    driver.quit()
             except Exception:
                 pass
 
@@ -859,6 +860,7 @@ def batch_read_detail(
         if driver is not None:
             try:
                 _save_cookies(driver)
-                driver.quit()
+                if not _driver_is_reused(driver):
+                    driver.quit()
             except Exception:
                 pass

@@ -32,9 +32,9 @@ class FormatterAndDownloadReportTests(unittest.TestCase):
             "doc_type": "journal",
         }
         thesis = {
-            "authors": "朱兴财",
+            "authors": "陈明",
             "title": "生成式人工智能应用研究",
-            "school": "暨南大学",
+            "school": "示例大学",
             "year": 2026,
             "doc_type": "thesis",
         }
@@ -46,7 +46,7 @@ class FormatterAndDownloadReportTests(unittest.TestCase):
         )
         self.assertEqual(
             format_gbt7714(thesis, 2),
-            "[2] 朱兴财. 生成式人工智能应用研究[D]. 暨南大学, 2026.",
+            "[2] 陈明. 生成式人工智能应用研究[D]. 示例大学, 2026.",
         )
 
     def test_apa_mla_and_chicago_are_available(self):

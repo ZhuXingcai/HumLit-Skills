@@ -137,8 +137,10 @@ def cmd_search(args):
                     enhanced_error["source_statuses"] = {"cnki": source_error}
                     _output(enhanced_error)
                     if reuse_driver:
-                        try: reuse_driver.quit()
-                        except Exception: pass
+                        from core.cnki.driver import _driver_is_reused
+                        if not _driver_is_reused(reuse_driver):
+                            try: reuse_driver.quit()
+                            except Exception: pass
                     return
                 # source == "all" 时知网失败不阻断，记录错误后继续 API 搜索
                 cnki_error = cnki_results[0]
@@ -459,10 +461,12 @@ def cmd_search(args):
 
     finally:
         if reuse_driver is not None:
-            try:
-                reuse_driver.quit()
-            except Exception:
-                pass
+            from core.cnki.driver import _driver_is_reused
+            if not _driver_is_reused(reuse_driver):
+                try:
+                    reuse_driver.quit()
+                except Exception:
+                    pass
 
 
 # ── batch-search 命令 ─────────────────────────────────

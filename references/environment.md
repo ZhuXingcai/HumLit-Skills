@@ -40,9 +40,12 @@
 
 - 需要校园网、机构 VPN，或学校支持的 CARSI/校外统一认证
 - 校外访问可先运行 `python scripts/literature.py auth-cnki` 预热会话；默认入口是 `https://fsso.cnki.net/`，也可用 `--auth-url` 传学校图书馆、VPN 或 CARSI 入口
-- `--institution` 是可选项。传入学校/机构名时脚本尝试自动选择；不传时用户在浏览器中手动选择，更适合不同学校和机构复用
-- 登录、扫码、短信、滑块等必须由用户手动完成。Agent 在运行时应明确告知用户：浏览器会打开、请不要关闭窗口、脚本会等待并保存 cookies/profile
-- 完成一次认证后，后续 CNKI 命令复用 `.humlit/browser-profile` 和 `.humlit/cookies.json`；同一项目/会话内通常无需反复登录，除非机构会话过期或用户使用 `auth-cnki --force`
+- `--institution` 是可选项。只有用户明确提供学校/机构名时，脚本才尝试自动选择；不传时用户在浏览器中手动选择。Agent 不得从用户论文、路径、历史对话或本地文档推断该参数
+- `auth-cnki` 默认不复用已有认证；首次使用或更换本机用户时，应省略 `--reuse-session`，在浏览器中手动选择机构并登录。只有用户明确传入 `--reuse-session` 才复用本机已有会话；`--force` 会忽略复用并重新认证
+- 登录、扫码、短信、滑块等必须由用户手动完成。Agent 在运行时应明确告知用户：浏览器会打开、请不要关闭窗口、脚本会等待并保存 cookies/profile；安全验证窗口保持可见
+- 完成一次认证后，后续 CNKI 命令复用 `.humlit/browser-profile` 和 `.humlit/cookies.json`；这些是当前本地项目运行时状态，不进入 Git，也不应复制给其他用户
+- 用户已经在当前本机完成认证后，后续检索不应再次执行默认 `auth-cnki` 或 `--force`。直接运行 `search` / `batch-search`，只有检索明确返回认证失效或未解决安全验证时才重新请求人工登录
+- `auth-cnki` 的成功只是检索任务的前置状态。若用户原本要求搜索、详情或下载，Agent 必须在认证后继续原任务，不能把“请回复已登录”当作最终交付
 - 使用 Clash/Mihomo/Surge/Quantumult X/PAC/系统代理等代理时，CNKI、CARSI 和学校认证域名必须直连。脚本会给 Edge/Chrome 注入 `proxy-bypass-list`，但 TUN/全局接管模式需要用户在代理软件中配置 DIRECT 规则
 - 验证码会自动弹出浏览器，用户手动完成后继续
 
@@ -54,6 +57,9 @@ python scripts/literature.py auth-cnki --wait-seconds 240 --keep-browser
 
 # 已知学校/机构名称时尝试自动选择
 python scripts/literature.py auth-cnki --institution "示例大学" --wait-seconds 240
+
+# 用户明确确认复用当前本机项目已有会话
+python scripts/literature.py auth-cnki --reuse-session --wait-seconds 120
 
 # 学校图书馆或 VPN 提供了自己的入口
 python scripts/literature.py auth-cnki --auth-url "https://library.example.edu/cnki" --direct-domain idp.example.edu

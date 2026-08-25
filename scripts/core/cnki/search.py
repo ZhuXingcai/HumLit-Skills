@@ -15,7 +15,7 @@ from .driver import (
     _detect_browser, _create_driver, _load_cookies, _save_cookies,
     _handle_captcha, _is_cnki_security_gate, _has_captcha_elements,
     _cnki_page_diagnostics, check_cnki_access,
-    CnkiSecurityError, DriverStartupError,
+    _driver_is_reused, CnkiSecurityError, DriverStartupError,
 )
 
 if HAS_SELENIUM:
@@ -257,7 +257,7 @@ def search_cnki(
         if driver is not None:
             try:
                 _save_cookies(driver)
-                if should_quit:
+                if should_quit and not _driver_is_reused(driver):
                     driver.quit()
             except Exception:
                 pass
@@ -502,7 +502,8 @@ def batch_search_cnki(
         if driver is not None:
             try:
                 _save_cookies(driver)
-                driver.quit()
+                if not _driver_is_reused(driver):
+                    driver.quit()
             except Exception:
                 pass
 

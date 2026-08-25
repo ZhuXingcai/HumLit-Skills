@@ -15,7 +15,7 @@ from .constants import (
 )
 from .driver import (
     _detect_browser, _create_driver, _load_cookies, _save_cookies,
-    _handle_captcha, check_cnki_access,
+    _handle_captcha, _driver_is_reused, check_cnki_access,
 )
 
 def _get_batch_window_size() -> int:
@@ -252,7 +252,8 @@ def download_cnki(
         if driver is not None:
             try:
                 _save_cookies(driver)
-                driver.quit()
+                if not _driver_is_reused(driver):
+                    driver.quit()
             except Exception:
                 pass
 
@@ -659,7 +660,8 @@ def batch_download_cnki(
         if driver is not None and owns_driver:
             try:
                 _save_cookies(driver)
-                driver.quit()
+                if not _driver_is_reused(driver):
+                    driver.quit()
             except Exception:
                 pass
 

@@ -138,6 +138,37 @@ def _load_cookies(driver: "webdriver.Remote"):
         _log(f"[cnki] cookie 加载失败: {e}")
 
 
+def _clear_cnki_cookies(
+    driver: "webdriver.Remote", origins: Optional[list[str]] = None
+) -> bool:
+    """Clear cookies for CNKI and the explicitly supplied auth origin."""
+    from urllib.parse import urlparse
+
+    targets = ["https://kns.cnki.net/", "https://fsso.cnki.net/"]
+    targets.extend(origins or [])
+    hosts = set()
+    for target in targets:
+        host = urlparse(target).netloc.lower()
+        if host:
+            hosts.add(host)
+
+    cleared = False
+    for host in sorted(hosts):
+        try:
+            driver.get(f"https://{host}/")
+            driver.delete_all_cookies()
+            try:
+                driver.execute_script(
+                    "window.localStorage.clear(); window.sessionStorage.clear();"
+                )
+            except Exception:
+                pass
+            cleared = True
+        except Exception as e:
+            _log(f"[cnki-auth] 无法清除 {host} 的旧 cookies，将继续手动认证: {e}")
+    return cleared
+
+
 _STEALTH_JS = """
     Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
     window.chrome = {runtime: {}, loadTimes: function(){}, csi: function(){}, app: {}};
@@ -420,6 +451,40 @@ def _connect_remote_browser(browser: str, port: int = _DEFAULT_DEBUG_PORT) -> "w
     return driver
 
 
+def _debug_port_from_profile(profile_dir: Path) -> Optional[int]:
+    """Read the active DevTools port written by a dedicated browser profile."""
+    marker = profile_dir / "DevToolsActivePort"
+    try:
+        value = marker.read_text(encoding="utf-8").splitlines()[0].strip()
+        port = int(value)
+        return port if 1 <= port <= 65535 else None
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _try_connect_existing_profile(browser: str, profile_dir: Path) -> Optional["webdriver.Remote"]:
+    """Reuse the already visible HumLit browser before starting another one."""
+    port = _debug_port_from_profile(profile_dir)
+    if not port or not _wait_for_debug_port(port, timeout=2):
+        return None
+    try:
+        driver = _connect_remote_browser(browser, port)
+    except Exception as e:
+        _log(f"[cnki] 连接已有 HumLit 浏览器失败: {e}")
+        return None
+    try:
+        driver._humlit_reused = True
+    except Exception:
+        pass
+    _log(f"[cnki] 复用已有 HumLit 浏览器实例（端口 {port}），不再新开窗口")
+    return driver
+
+
+def _driver_is_reused(driver: Optional["webdriver.Remote"]) -> bool:
+    """Return whether a driver belongs to a user-visible shared browser."""
+    return bool(getattr(driver, "_humlit_reused", False))
+
+
 def _hide_browser(driver: "webdriver.Remote"):
     """将浏览器最小化到任务栏，便于用户随时恢复查看状态。"""
     try:
@@ -615,8 +680,12 @@ def _find_local_driver(browser: str) -> Optional[str]:
     return None
 
 
-def _create_driver(browser: str = None, headless: bool = False) -> "webdriver.Remote":
-    """创建浏览器实例。默认有头模式，完成验证后最小化到任务栏，便于随时恢复查看。"""
+def _create_driver(
+    browser: str = None,
+    headless: bool = False,
+    detach: bool = False,
+) -> "webdriver.Remote":
+    """Create or reuse the visible browser dedicated to the current project."""
     if not HAS_SELENIUM:
         raise RuntimeError(
             "selenium 未安装。请运行: pip install selenium>=4.10\n"
@@ -650,6 +719,8 @@ def _create_driver(browser: str = None, headless: bool = False) -> "webdriver.Re
         options.add_argument(arg)
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
+    if detach:
+        options.add_experimental_option("detach", True)
 
     sandbox_profile = state_path("browser-profile")
     try:
@@ -657,6 +728,10 @@ def _create_driver(browser: str = None, headless: bool = False) -> "webdriver.Re
         options.add_argument(f"--user-data-dir={sandbox_profile}")
     except (PermissionError, OSError):
         pass
+
+    existing_driver = _try_connect_existing_profile(browser, sandbox_profile)
+    if existing_driver is not None:
+        return existing_driver
 
     driver = None
     first_err = None
@@ -730,6 +805,11 @@ def _create_driver(browser: str = None, headless: bool = False) -> "webdriver.Re
             f"3. 确认网络可用后：pip install selenium>=4.10 会自动管理驱动"
         )
         raise DriverStartupError(error_code, err_msg)
+
+    try:
+        driver._humlit_reused = False
+    except Exception:
+        pass
 
     no_stealth = (
         get_env(
@@ -820,12 +900,32 @@ def _has_cnki_institution_access(driver: "webdriver.Remote", institution: Option
     except Exception:
         current_url = ""
     haystack = text + "\n" + title
-    is_cnki_url = "cnki.net" in current_url.lower()
+    lowered_url = current_url.lower()
+    is_cnki_url = "cnki.net" in lowered_url
+    is_content_page = is_cnki_url and "fsso.cnki.net" not in lowered_url
     markers = ("机构馆", "机构用户", "机构账号", "机构登录", "IP登录", "IP 登录")
-    if is_cnki_url and any(marker in haystack for marker in markers):
+    if is_content_page and any(marker in haystack for marker in markers):
         return True
-    if institution and institution in haystack and is_cnki_url:
+    if institution and institution in haystack and is_content_page:
         return True
+    if is_content_page and _cnki_has_selected_institution(text):
+        return True
+    return False
+
+
+def _cnki_has_selected_institution(text: str) -> bool:
+    """识别用户手动选校后 CNKI 页眉中的“机构名 + 个人登录”标识。"""
+    lines = [" ".join(line.split()) for line in (text or "").splitlines()]
+    lines = [line for line in lines if line]
+    institution_tokens = ("大学", "学院", "学校", "研究院", "图书馆", "机构")
+    for index, line in enumerate(lines):
+        if "个人登录" not in line:
+            continue
+        start = max(0, index - 2)
+        context = " ".join(lines[start:index + 1])
+        prefix = context.split("个人登录", 1)[0].strip(" |·")
+        if 2 <= len(prefix) <= 120 and any(token in prefix for token in institution_tokens):
+            return True
     return False
 
 
@@ -946,6 +1046,8 @@ def _wait_for_cnki_auth(
                 if "cnki.net" not in current_url:
                     # Stay on the user's SSO page until it redirects back.
                     pass
+        except CnkiSecurityError:
+            raise
         except Exception as e:
             _log(f"[cnki-auth] 等待认证时浏览器状态异常: {e}")
             return False
@@ -974,29 +1076,42 @@ def authenticate_cnki(
     debug_snapshot: Optional[str] = None,
     keep_browser: bool = False,
     force: bool = False,
+    reuse_session: bool = False,
 ) -> dict:
     """Open CNKI off-campus authentication and persist the browser session.
 
     The function is intentionally account-agnostic. Users can pass a school name
     for CNKI FSSO auto-selection, or omit it and complete their institution's
-    portal manually. Cookies and the Chrome/Edge profile are reused by later CNKI
-    commands, so one successful login is normally enough for the current project
-    and at least one agent conversation until the institution session expires.
+    portal manually. Authentication starts a manual flow by default; reusing an
+    existing local session requires the explicit ``reuse_session`` option. Later
+    CNKI commands may reuse the local cookies/profile after successful login.
     """
     driver = None
     previous_direct_domains = None
     direct_domain_list: list[str] = []
     try:
         previous_direct_domains, direct_domain_list = _merge_direct_domains(direct_domains)
+        profile_dir = state_path("browser-profile")
+        local_session_exists = _cookie_path().exists() or (
+            profile_dir.exists() and any(profile_dir.iterdir())
+        )
         browser = _detect_browser()
-        driver = _create_driver(browser=browser)
+        driver = _create_driver(browser=browser, detach=keep_browser)
 
         driver.get("https://kns.cnki.net/")
         time.sleep(1)
-        _load_cookies(driver)
+        session_reused = bool(reuse_session and not force)
+        session_reset = False
+        if session_reused:
+            _load_cookies(driver)
+        else:
+            session_reset = _clear_cnki_cookies(
+                driver, origins=[auth_url, verify_url]
+            )
+            _log("[cnki-auth] 未启用 --reuse-session，进入手动认证流程。")
         driver.get(verify_url)
         time.sleep(1)
-        if not force and _has_cnki_institution_access(driver, institution=institution):
+        if session_reused and _has_cnki_institution_access(driver, institution=institution):
             cookies_saved = bool(_save_cookies(driver) or _cookie_path().exists())
             return {
                 "status": "success",
@@ -1004,6 +1119,9 @@ def authenticate_cnki(
                 "verify_url": verify_url,
                 "institution": institution,
                 "already_authenticated": True,
+                "session_reused": True,
+                "session_reset": False,
+                "local_session_exists": local_session_exists,
                 "access_confirmed": True,
                 "cookies_saved": cookies_saved,
                 "cookie_file": str(_cookie_path()),
@@ -1015,7 +1133,9 @@ def authenticate_cnki(
 
         _log(f"[cnki-auth] 打开认证入口: {auth_url}")
         driver.get(auth_url)
-        selected_institution = _select_cnki_institution(driver, institution)
+        selected_institution = (
+            _select_cnki_institution(driver, institution) if institution else False
+        )
         _show_browser(driver)
 
         access_confirmed = _wait_for_cnki_auth(
@@ -1025,9 +1145,17 @@ def authenticate_cnki(
             wait_seconds=max(int(wait_seconds or 0), 0),
         )
 
-        _log(f"[cnki-auth] 验证知网访问: {verify_url}")
-        driver.get(verify_url)
-        time.sleep(1)
+        try:
+            current_url = driver.current_url or ""
+        except Exception:
+            current_url = ""
+        already_on_cnki = "cnki.net" in current_url.lower() and "fsso.cnki.net" not in current_url.lower()
+        if access_confirmed and already_on_cnki:
+            _log("[cnki-auth] 当前知网页面已确认机构权限，不重复刷新验证页。")
+        else:
+            _log(f"[cnki-auth] 验证知网访问: {verify_url}")
+            driver.get(verify_url)
+            time.sleep(1)
         if captcha_timeout > 0 and (_is_cnki_security_gate(driver) or _has_captcha_elements(driver)):
             driver = _show_browser_for_captcha(
                 driver,
@@ -1053,6 +1181,9 @@ def authenticate_cnki(
             "institution": institution,
             "institution_selected": selected_institution,
             "already_authenticated": False,
+            "session_reused": False,
+            "session_reset": session_reset,
+            "local_session_exists": local_session_exists,
             "access_confirmed": access_confirmed,
             "cookies_saved": cookies_saved,
             "cookie_file": str(_cookie_path()),
@@ -1081,10 +1212,11 @@ def authenticate_cnki(
             "institution": institution,
             "captcha_timeout": captcha_timeout,
             "direct_domains": direct_domain_list,
+            "session_reused": bool(reuse_session and not force),
         }
     finally:
         _restore_direct_domains(previous_direct_domains)
-        if driver is not None and not keep_browser:
+        if driver is not None and not keep_browser and not _driver_is_reused(driver):
             try:
                 driver.quit()
             except Exception:
@@ -1103,7 +1235,7 @@ def _is_cnki_security_gate(driver: "webdriver.Remote") -> bool:
         title = (driver.title or "").strip()
     except Exception:
         return False
-    if "/verify/" in url or re.search(r"[?&]captchaid=", url, re.IGNORECASE):
+    if "/verify/" in url:
         return True
     gate_keywords = ("安全验证", "安全检查", "请完成验证", "人机验证")
     for kw in gate_keywords:
@@ -1121,9 +1253,79 @@ def _is_cnki_security_gate(driver: "webdriver.Remote") -> bool:
         "滑动验证",
         "点击验证",
     )
-    if any(marker in body_text for marker in body_markers):
+    visible_marker = _has_visible_cnki_marker(driver, body_markers)
+    if visible_marker is True or (
+        visible_marker is None and any(marker in body_text for marker in body_markers)
+    ):
         return True
+    if re.search(r"[?&]captchaid=", url, re.IGNORECASE):
+        return not _has_ready_cnki_surface(driver)
     return False
+
+
+def _has_ready_cnki_surface(driver: "webdriver.Remote") -> bool:
+    """识别验证码参数残留但检索界面已经可用的知网页面。"""
+    try:
+        url = (driver.current_url or "").lower()
+    except Exception:
+        return False
+    if "cnki.net" not in url or "fsso.cnki.net" in url or "/verify/" in url:
+        return False
+
+    selectors = (
+        "#txt_search",
+        "input.search-input",
+        "#txt_SearchText",
+        "input[name='txt_1_value1']",
+        "table.result-table-list",
+        ".result-table-list",
+        "#gridTable",
+    )
+    try:
+        driver.implicitly_wait(0)
+        for selector in selectors:
+            if driver.find_elements(By.CSS_SELECTOR, selector):
+                return True
+    except Exception:
+        return False
+    finally:
+        try:
+            driver.implicitly_wait(3)
+        except Exception:
+            pass
+    return False
+
+
+def _has_visible_cnki_marker(
+    driver: "webdriver.Remote", markers: tuple[str, ...]
+) -> Optional[bool]:
+    """Return whether a challenge marker belongs to a visible DOM element."""
+    try:
+        result = driver.execute_script(
+            """
+            const markers = arguments[0];
+            const visible = (el) => {
+              for (let node = el; node && node !== document; node = node.parentElement) {
+                const style = window.getComputedStyle(node);
+                if (style.display === 'none' || style.visibility === 'hidden' ||
+                    parseFloat(style.opacity || '1') === 0) return false;
+              }
+              const rect = el.getBoundingClientRect();
+              return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0 &&
+                rect.top < window.innerHeight && rect.left < window.innerWidth;
+            };
+            return Array.from(document.querySelectorAll('body *')).some((el) => {
+              // Skip ancestors such as body whose text can include hidden modal content.
+              if (el.children.length > 0) return false;
+              const text = (el.textContent || '').trim();
+              return visible(el) && markers.some((marker) => text.includes(marker));
+            });
+            """,
+            list(markers),
+        )
+        return result if isinstance(result, bool) else None
+    except Exception:
+        return None
 
 
 def _cnki_page_diagnostics(driver: "webdriver.Remote") -> dict:
@@ -1161,7 +1363,7 @@ def _show_browser_for_captcha(
     poll_timeout: int = 180,
 ) -> "webdriver.Remote":
     """将浏览器移回屏幕让用户完成验证。
-    验证通过后自动最小化到任务栏并保存 cookies。
+    验证通过后保持浏览器可见，由调用方决定何时关闭或最小化。
     """
     _show_browser(driver)
 
@@ -1206,9 +1408,8 @@ def _show_browser_for_captcha(
 
     _save_cookies(driver)
     if verified:
-        _hide_browser(driver)
-        time.sleep(1)
-        _log("[cnki] 浏览器已最小化到任务栏，继续执行；如需查看状态可从任务栏恢复窗口...")
+        _show_browser(driver)
+        _log("[cnki] 安全验证已通过，浏览器保持可见并继续执行。")
         return driver
 
     _show_browser(driver)

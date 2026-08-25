@@ -109,10 +109,110 @@ parse zero rows as `NO_RESULTS`.
 Correct: require two consecutive clean security checks, then separately confirm
 result rows or an unambiguous empty page; otherwise return a structured error.
 
+If a `captchaId` query parameter remains after the challenge UI has disappeared,
+do not treat the parameter alone as a permanent gate. A visible challenge still
+wins, but an actually available search/result DOM is evidence that the retained
+parameter is stale and the workflow may continue.
+
 ## Reference Examples
 
 - Structured session error: `scripts/cli/_common.py::SessionDataError`
 - Per-source status handling: `scripts/core/search.py` and
   `scripts/core/search_async.py`
 - Live status classification: `scripts/smoke_test.py::classify_live_status`
+
+## Scenario: CNKI Manual Institution Selection and Local Session Isolation
+
+### 1. Scope / Trigger
+
+- Trigger: `auth-cnki` is used by different people or on a shared workstation,
+  where an existing browser profile must not silently select or expose the
+  previous user's institution session.
+
+### 2. Signatures
+
+- Core: `authenticate_cnki(..., institution: Optional[str] = None,
+  reuse_session: bool = False, force: bool = False) -> dict`
+- CLI: `auth-cnki [--institution NAME] [--reuse-session] [--force]`
+
+### 3. Contracts
+
+- Omitting `--institution` leaves institution selection to the user in the
+  visible browser. No user document, path, conversation context, or repository
+  fixture may populate this argument.
+- Omitting `--reuse-session` starts a fresh manual authentication flow and
+  clears CNKI/auth-origin cookies and web storage in the dedicated local
+  profile. It does not delete the profile directory or any downloaded papers.
+- `--reuse-session` is the only opt-in path that loads the local cookies/profile
+  before checking for `already_authenticated`.
+- Successful output includes `session_reused`, `session_reset`,
+  `local_session_exists`, and `institution_selected`; it must not include
+  cookies, credentials, or institution data inferred from private input.
+- Cookies/profile remain under the ignored local `.humlit/` directory and are
+  never part of public repository state.
+
+### 4. Validation & Error Matrix
+
+- No explicit institution -> `institution_selected=false`; browser remains
+  available for manual selection.
+- Explicit `--institution NAME` -> auto-selection may be attempted; failure to
+  find it is recoverable and instructs the user to select manually.
+- Existing local session without `--reuse-session` -> do not return
+  `already_authenticated`; reset the relevant browser-origin state and prompt
+  for manual authentication.
+- `--reuse-session` with valid institution access -> `already_authenticated=true`
+  and `session_reused=true`.
+- CAPTCHA/security challenge -> browser is shown in the foreground and remains
+  visible after verification; unresolved challenges return structured CNKI
+  errors rather than empty results.
+- A driver connected through the active project `DevToolsActivePort` is a shared
+  user-visible browser; commands save cookies but must not call `quit()` on it.
+  Only a browser created for the current command may be closed automatically.
+
+### 5. Good/Base/Bad Cases
+
+- Good: a new student runs `auth-cnki`, manually picks their school, completes
+  login, and receives `session_reused=false`.
+- Base: the same student later runs `auth-cnki --reuse-session` and receives a
+  local-session reuse result without re-entering credentials.
+- Bad: an agent derives a school from a thesis PDF and passes `--institution`
+  without user instruction, or silently reuses a prior user's cookies.
+
+### 6. Tests Required
+
+- Assert `_select_cnki_institution(driver, None)` does not navigate.
+- Assert default authentication does not call `_load_cookies`, clears only
+  browser-origin state, and opens the generic auth URL.
+- Assert `reuse_session=True` is required for `already_authenticated`.
+- Assert CAPTCHA success does not call `_hide_browser` and the browser is
+  brought to the foreground.
+- Assert public fixtures contain synthetic names/institutions only.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```text
+auth-cnki  -> load previous cookies -> infer a school -> auto-select -> hide browser
+```
+
+#### Correct
+
+```text
+auth-cnki  -> show browser -> user selects institution and authenticates
+auth-cnki --reuse-session  -> explicitly reuse the current local session
+```
+
+### 8. Authentication-to-Action Handoff
+
+- `auth-cnki` is a prerequisite, not completion of a search/download request.
+- After a successful manual login, continue the original CNKI action using the
+  saved local state. Do not invoke default authentication or `--force` again.
+- If authentication polling times out while the user confirms that the retained
+  browser is logged in, run the intended search once and use its structured page
+  classification as the deciding probe. Re-authenticate only after that action
+  reports an authentication or unresolved-security error.
+- A focused security exception raised while polling must propagate; swallowing
+  it and navigating to the verification page again creates duplicate challenge
+  cycles and loses the actual failure state.
 - Release-level contract validation: `scripts/verify_release.py`

@@ -51,6 +51,7 @@ def cmd_auth_cnki(args):
         debug_snapshot=args.debug_snapshot,
         keep_browser=args.keep_browser,
         force=args.force,
+        reuse_session=getattr(args, "reuse_session", False),
     )
     _output(result)
 
@@ -182,7 +183,9 @@ def add_parser(sub):
     p_auth.add_argument("--keep-browser", action="store_true",
                         help="完成后保留浏览器窗口，便于用户继续登录或手动检查")
     p_auth.add_argument("--force", action="store_true",
-                        help="即使检测到已有机构会话，也重新打开认证入口")
+                        help="重新打开认证入口，并忽略本地会话复用")
+    p_auth.add_argument("--reuse-session", action="store_true",
+                        help="显式复用本机当前项目已有 CNKI 会话；默认要求手动重新认证")
     p_auth.set_defaults(func=cmd_auth_cnki)
 
     # read-detail

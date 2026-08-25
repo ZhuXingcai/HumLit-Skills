@@ -461,6 +461,10 @@ CNKI 功能需要：
 
 ### 校外认证与代理
 
+`auth-cnki` 默认打开可见浏览器，由当前用户手动选择机构和完成登录；Skill 不会从论文、路径或历史上下文推断学校。只有显式传入 `--institution` 才尝试自动选校，只有显式传入 `--reuse-session` 才复用当前项目 `.humlit/` 下的本机会话。
+
+认证完成后应直接继续原定的检索、详情或下载命令；不要再次运行默认认证或 `--force`。若认证等待超时但用户确认保留窗口已经登录，可先执行原定检索，由检索页的结构化状态判断会话是否可用，避免循环弹出登录窗口。
+
 ```bash
 # CNKI FSSO，用户在浏览器中选择学校
 humlit auth-cnki --wait-seconds 240 --keep-browser
@@ -474,6 +478,9 @@ humlit auth-cnki \
 humlit auth-cnki \
   --auth-url "https://library.example.edu/cnki" \
   --direct-domain idp.example.edu
+
+# 仅在用户确认当前本机已有会话属于自己时复用
+humlit auth-cnki --reuse-session --wait-seconds 120
 ```
 
 使用 Clash、Mihomo、Surge、Quantumult X、系统 PAC 或 TUN 模式时，CNKI、CARSI 和学校认证域名必须走直连。详细说明见 [`references/environment.md`](references/environment.md)。

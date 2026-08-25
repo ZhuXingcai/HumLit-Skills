@@ -48,6 +48,21 @@ CNKI browser state, and institutional authorization are conditional.
 - Real thesis and research materials are local user data. Do not commit them or
   include identifying excerpts in tests, logs, or Trellis task artifacts.
 
+### End-to-End Academic Trial Convention
+
+真实学术试运行必须把以下四类证据分开记录：`metadata-only`（仅题录）、
+`abstract`（摘要）、`fulltext`（全文）和 `citation metadata`（可格式化题录）。
+题录只能作为待核对线索，摘要只能支持摘要明确涉及的对象/方法/结果线索，
+不能因为 `review` 或 `validate` 的词项匹配而升级为全文论断。
+
+公开 live、OA 下载和 CNKI 桌面能力必须作为条件层单独报告：保存每个来源的
+`source_statuses`、错误码和时间；HTTP 403、429、HTML 登录页、认证未完成或
+连接器未运行都不能写成 `empty` 或“没有文献”。离线测试、架构验证和 smoke
+门禁独立验收，避免外部服务波动掩盖仓库回归。
+
+真实论文、PDF、`.humlit/` 和临时产物留在仓库外；Trellis 记录只保留脱敏的
+输入角色、数量、命令、状态、失败分类和人工核验点。
+
 ## Review Checklist
 
 - Does every public path still emit one valid JSON document?
@@ -58,6 +73,9 @@ CNKI browser state, and institutional authorization are conditional.
 - Did the change affect offline smoke, capability contracts, Skill routing,
   release identity, or evaluation evidence?
 - Are tests isolated from local `.humlit/` state and private research files?
+- For browser authentication flows, does the test cover the transition from
+  authenticated state to the originally requested action without a second
+  login cycle?
 
 ## Forbidden Patterns
 
