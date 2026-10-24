@@ -60,15 +60,12 @@ def _parse_marker(line: str) -> tuple[bool, list[str]] | None:
 
 
 def get_phase_index() -> str:
-    """Return Phase Index + Phase 1/2/3 step bodies from workflow.md.
+    """Return the compact Phase Index summary from workflow.md.
 
-    Matches what the SessionStart hook injects into the `<workflow>` block:
-    starts at `## Phase Index`, continues through `## Phase 1: Plan`,
-    `## Phase 2: Execute`, `## Phase 3: Finish`, stops at
-    `## Customizing Trellis (for forks)` (the docs-for-forks footer).
-    `[workflow-state:STATUS]` tag blocks (now embedded in Phase Index since
-    v0.5.0-rc.0) are consumed by the UserPromptSubmit hook so they're
-    stripped from this output.
+    SessionStart and no-step phase context use this small summary as their
+    orientation payload. Detailed Phase 1/2/3 instructions are loaded with
+    ``get_step`` on demand. ``[workflow-state:STATUS]`` tag blocks are
+    consumed by the per-turn hook, so they're stripped from this output.
     """
     text = _read_workflow()
     lines = text.splitlines()
@@ -80,7 +77,7 @@ def get_phase_index() -> str:
         if start is None and stripped == _PHASE_INDEX_HEADING:
             start = i
             continue
-        if start is not None and stripped == "## Customizing Trellis (for forks)":
+        if start is not None and stripped == "## Phase 1: Plan":
             end = i
             break
 
@@ -144,30 +141,60 @@ def _platform_matches(platform: str, block_names: list[str]) -> bool:
     return False
 
 
+_PLATFORM_MARKER_LABELS: dict[str, str] = {
+    # workflow.md marker blocks label platforms with their product names, but
+    # every caller passes the stable id instead (`--platform {{CLI_FLAG}}` in
+    # the start / continue commands). `_platform_matches` only strips
+    # punctuation, so an id that is not its label-minus-spaces never matches and
+    # `filter_platform` drops the block WITHOUT error — the section just comes
+    # back empty. Four platforms shipped that way before this table existed.
+    #
+    # Add an entry whenever a platform's id is not its marker label with the
+    # separators removed. `test/registry-invariants.test.ts` asserts every
+    # registry id keeps a non-empty routing section, so a missing entry fails
+    # there rather than silently blanking that platform's routing.
+    "claude": "Claude Code",
+    "kimi": "Kimi Code",
+    "omp": "Oh My Pi",
+    "dsh": "DeepSeek Harness",
+}
+
+
 def resolve_effective_platform(platform: str, config: dict) -> str:
     """Map ``codex`` to a dispatch-mode-namespaced virtual platform name.
 
-    When ``--platform codex`` is passed, return ``"codex-inline"`` (default)
-    or ``"codex-sub-agent"`` based on ``.trellis/config.yaml`` ``codex.dispatch_mode``.
+    When ``--platform codex`` is passed, return ``"codex-sub-agent"`` by
+    default or ``"codex-inline"`` when explicitly configured in
+    ``.trellis/config.yaml``. ``sub-agent`` remains an alias for ``auto``.
     ``filter_platform`` then surfaces blocks whose marker lists include the
     namespaced name (e.g. ``[codex-sub-agent, ...]`` or ``[codex-inline, Kilo,
-    Antigravity, Windsurf]``).
+    Antigravity, Devin]``).
 
-    Default is ``inline`` because Codex sub-agents run with ``fork_turns="none"``
-    isolation and can't inherit the parent session's task context — inline
-    keeps the main agent in charge so context isn't lost. Invalid / missing
-    values also fall back to inline.
+    Native Codex context injection supports the ``auto`` default. Invalid
+    explicit values fall back to ``inline`` safely; this renderer deliberately
+    does not warn because it can run in normal CLI output flows.
 
-    Other platforms are returned unchanged.
+    Platforms whose marker label differs from their id resolve through
+    ``_PLATFORM_MARKER_LABELS``. Everything else is returned unchanged.
     """
+    label = _PLATFORM_MARKER_LABELS.get(platform.strip().lower())
+    if label:
+        return label
     if platform == "codex":
-        mode = "inline"
+        mode = "auto"
         codex_cfg = config.get("codex") if isinstance(config, dict) else None
-        if isinstance(codex_cfg, dict):
-            cfg_mode = codex_cfg.get("dispatch_mode")
-            if cfg_mode in ("inline", "sub-agent"):
-                mode = cfg_mode
-        return f"codex-{mode}"
+        if codex_cfg is not None:
+            if not isinstance(codex_cfg, dict):
+                mode = "inline"
+            else:
+                cfg_mode = str(codex_cfg.get("dispatch_mode", mode)).strip().lower()
+                if cfg_mode == "inline":
+                    mode = "inline"
+                elif cfg_mode in ("auto", "sub-agent"):
+                    mode = "auto"
+                else:
+                    mode = "inline"
+        return "codex-sub-agent" if mode == "auto" else "codex-inline"
     return platform
 
 
