@@ -15,7 +15,7 @@ routing: {
     "fragment": "static/fragments/task/search.md",
     "commands": ["search", "batch-search", "citations", "trends"],
     "capabilities": ["public_api_search", "base_search", "cnki_research", "citation_network", "session_analysis"],
-    "references": ["references/api-search-best-practices.md", "references/search/api-sources-and-ranking.md", "references/search/filtering-and-pagination.md", "references/search/recipes-and-operations.md", "references/core-journals.md", "references/error-codes.md"]
+    "references": ["references/api-search-best-practices.md", "references/search/api-sources-and-ranking.md", "references/search/filtering-and-pagination.md", "references/search/recipes-and-operations.md", "references/search/cnki-advanced-retrieval.md", "references/search/cnki-professional-syntax.md", "references/core-journals.md", "references/error-codes.md"]
   },
   "download": {
     "triggers": ["OA 或合法 CNKI 全文、详情与下载"],

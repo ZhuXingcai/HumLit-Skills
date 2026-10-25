@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### CNKI Advanced Retrieval
+
+- Add `--condition` (repeatable, up to 10), `--professional`, `--match` and
+  `--cross-language` to `search`; `batch-search` gains `--match` and
+  `--cross-language`. Existing arguments keep their behavior.
+- Add `retrieval` to the JSON payload: requested vs applied conditions,
+  `verified`, the submitted professional expression, and `total_hits`.
+- Add `references/search/cnki-advanced-retrieval.md` (concept-group method,
+  field and match-mode selection, iteration strategy, anti-patterns) and
+  `references/search/cnki-professional-syntax.md` (official CNKI professional
+  search grammar).
+
+### Behavior Change (intentional)
+
+- `_advanced_search` now verifies every requested condition (field, logic,
+  match mode, and written value) before submitting. Previously any single
+  successfully filled row made the whole search count as success, so a request
+  for "A and B and C" could silently run with only "A" applied. Partial
+  application now returns `CNKI_CONDITION_NOT_APPLIED` instead of results.
+- After submission the result page is read back and compared with the request;
+  a mismatch returns `CNKI_RETRIEVAL_MISMATCH`. When the page cannot be read,
+  `retrieval.verified` is `null` rather than claiming success.
+- `ADV_SEARCH_FALLBACK` is now limited to the case where the advanced-search
+  form itself is unavailable and a keyword exists to fall back on.
+- New error codes: `CNKI_INVALID_EXPRESSION`, `CNKI_TOO_MANY_CONDITIONS`,
+  `CNKI_CONDITION_NOT_APPLIED`, `CNKI_RETRIEVAL_MISMATCH`,
+  `CNKI_OPTION_SOURCE_MISMATCH`.
+
 ## 1.0.2
 
 ### CNKI First-Run Readiness

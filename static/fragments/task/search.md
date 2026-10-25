@@ -18,6 +18,7 @@
 |----------|--------------------|--------------------|
 | 搜索（单关键词） | 中文学位/核心/CNKI 专属用 `search "词"`；其他用 `--source api --async-search` | `search "词" --source api --async-search` |
 | 搜索（多关键词） | CNKI 专属用 `batch-search`；其他逐组 `search --source api --async-search --append` | 逐组 `search --source api --async-search --append` |
+| 多概念精准定位（需要 A 且 B） | 高级检索多条件 `search "" --condition "字段\|逻辑\|匹配\|值"`（可重复，最多 10 条）；跨字段布尔/位置限定用 `search "" --professional "表达式"` | API 源不支持布尔检索式，逐组检索后由 Agent 交叉比对 |
 | 按作者/期刊搜 | `search --author / --journal` | 同上加 `--source`（DBLP 适合计算机领域作者搜索） |
 | 核心期刊 | 加 `--core`（读 [core-journals.md](../../../references/core-journals.md)） | API 源无核心期刊筛选 |
 | 引文网络 | `citations <DOI>` | 同左（不依赖知网） |
@@ -29,7 +30,7 @@
 
 | 命令 | 用途 | 关键参数 |
 |------|------|----------|
-| `search "词"` | 单关键词搜索 | `--source` (cnki/openalex/semantic/arxiv/nssd/dblp/api/all；base 仅实验性显式调用) `--core` `--doc-type` `--field` `--author` `--journal` `--year-from` `--year-to` `--sort` `--pages` `--limit` `--cite-enrich` `--export` `--output` `--download` `--download-dir` `--download-top-n` `--download-file-format` `--download-fallback-format`（别名 `--fallback-format`）`--download-citation-style` `--download-report-output` `--append` `--project` `--author-filter` `--journal-filter` `--field-of-study` `--page` `--enable-fallback` `--async-search` |
+| `search "词"` | 单关键词搜索 | `--source` (cnki/openalex/semantic/arxiv/nssd/dblp/api/all；base 仅实验性显式调用) `--core` `--doc-type` `--field` `--author` `--journal` `--condition` `--professional` `--match` `--cross-language` `--year-from` `--year-to` `--sort` `--pages` `--limit` `--cite-enrich` `--export` `--output` `--download` `--download-dir` `--download-top-n` `--download-file-format` `--download-fallback-format`（别名 `--fallback-format`）`--download-citation-style` `--download-report-output` `--append` `--project` `--author-filter` `--journal-filter` `--field-of-study` `--page` `--enable-fallback` `--async-search` |
 | `batch-search "词1" "词2"` | 多关键词搜索 | `--query-file` `--core` `--doc-type` `--field` `--author` `--journal` `--year-from` `--year-to` `--sort` `--pages` `--export` `--output` `--append` `--project` |
 | `citations "DOI/URL"` | 引文网络分析 | `--direction citing/cited/both` `--limit` |
 | `trends` | 研究趋势分析（基于会话） | `--project` |
@@ -73,6 +74,30 @@ Agent 的职责是从用户自然语言中提取作者/期刊名/文献类型/�
 - "搜摘要里提到内容分析的硕士论文" → `search "内容分析" --doc-type master --field 摘要`
 - "找博士论文中关于深度学习的" → `search "深度学习" --doc-type doctor`
 
+### 检索式参数（知网精准定位）
+
+**构造检索式前必须先读 [知网高级检索：检索式构造与精准定位](../../../references/search/cnki-advanced-retrieval.md)。**
+禁止把多个概念用空格堆进一个检索框。
+
+`--condition "字段|逻辑|匹配|值"`：高级检索条件，可重复，最多 10 条。三种写法：
+`字段|值`、`字段|逻辑|值`、`字段|逻辑|匹配|值`。逻辑 `并且/或者/不含`，匹配 `精确/模糊`。
+同字段组合用 `*`（与）`+`（或）`-`（非），**运算符前后各空一格**，单框不超过 120 字符。
+
+`--professional "表达式"`：专业检索，位置参数须留空。
+例：`search "" --professional "SU %= 知识管理 AND AU = 邱均平"`。与 `--condition` 互斥。
+
+`--match 精确/模糊`：仅用于无 `--condition` 的单字段检索。
+**主题只支持相关度匹配**，给主题指定精确/模糊会被拒绝；关键词/作者/文献来源的"精确"是
+完全一致，通常应使用"模糊"。
+
+`--cross-language on/off`：中英文扩展，知网默认开启。需要纯净中文结果时用 `off`。
+
+`batch-search` 是**多次独立检索**，不能表达"A 且 B"；需要交集时用 `--condition` 或
+`--professional`。
+
+输出中的 `retrieval` 必须核对：`applied` 是实际生效的条件，`verified=false` 表示回读不一致
+（结果不可信），`total_hits` 是迭代宽窄的唯一依据。
+
 ## 检索优先级机制
 
 所有搜索结果自动计算 `retrieval_priority_score`（0-100），用于安排检索和精读顺序，不代表学术质量。评分维度：
@@ -99,6 +124,7 @@ Agent 的职责是从用户自然语言中提取作者/期刊名/文献类型/�
 
 ## 附件
 
+- [知网高级检索](../../../references/search/cnki-advanced-retrieval.md) — 概念组拆解、字段与匹配方式、同字段组合、专业检索语法、迭代与反模式
 - [文献检索](../../../references/workflows.md#文献检索) — 关键词提取、数据源选择、核心期刊判断
 - [引文网络分析](../../../references/workflows.md#引文网络分析) — citations 命令，不依赖知网
 - [研究趋势分析](../../../references/workflows.md#研究趋势分析) — trends 命令，基于会话数据

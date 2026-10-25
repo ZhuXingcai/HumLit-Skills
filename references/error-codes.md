@@ -10,6 +10,11 @@ Agent 根据此表决定如何回应用户。
 | `CNKI_UNREACHABLE` | 无法连接知网 | 提示检查校园网/VPN |
 | `CNKI_AUTH_FAILED` | 知网校外认证流程异常 | 展示 `message` 和认证入口，提示用户检查 `--auth-url`、`--institution`、`--direct-domain`，并在浏览器中完成学校登录/验证码后重试 |
 | `CNKI_SEARCH_FAILED` | 搜索过程异常 | 提示网络问题，建议稍后重试 |
+| `CNKI_INVALID_EXPRESSION` | 检索式/条件不合法（字段未知、运算符未空格、括号或引号不配对、超 120 字符、主题指定精确/模糊、`--condition` 与 `--professional` 互斥） | 按 `message` 修正检索式后再试，不要原样重试 |
+| `CNKI_TOO_MANY_CONDITIONS` | 高级检索条件超过 10 条 | 用 `*`/`+`/`-` 合并同字段条件，或改用 `--professional` |
+| `CNKI_CONDITION_NOT_APPLIED` | 请求的检索条件未能应用到表单（字段/逻辑/匹配方式/检索词写入失败） | 展示具体字段与原因；不得解释为无结果，也不得当作成功结果使用 |
+| `CNKI_RETRIEVAL_MISMATCH` | 结果页回读的检索条件与请求不一致 | 结果不可信，停止并报告差异；检查是否页面改版 |
+| `CNKI_OPTION_SOURCE_MISMATCH` | `--condition` / `--professional` 用于非知网数据源 | 改用 `--source cnki`/`all`，或去掉检索式参数 |
 | `CNKI_SECURITY_GATE_TIMEOUT` | 知网安全验证等待超时 | 保留浏览器窗口，提示用户手动完成验证后重试；不得解释为无结果 |
 | `CNKI_SECURITY_GATE_UNRESOLVED` | 搜索结果页仍处于安全验证状态 | 展示脱敏诊断并停止本来源，不得降级为 `empty` |
 | `CNKI_CAPTCHA_HANDLING_FAILED` | 验证码状态检测或处理异常 | 展示脱敏诊断，检查页面改版/浏览器会话后重试 |

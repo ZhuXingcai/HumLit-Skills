@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "新增 core/cnki/query.py 与 tests 需符合分层与 CLI 注册约定"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "新增 4 个错误码与 retrieval 输出字段必须遵守 JSON 状态合同"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "新增离线测试与回归基线要求"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "诊断走 stderr、stdout 单 JSON 文档的约束"}
+{"file": ".trellis/tasks/10-25-cnki-advanced-retrieval/design.md", "reason": "条件模型、CLI 参数、驱动改造与输出合同的技术方案"}
+{"file": ".trellis/tasks/10-25-cnki-advanced-retrieval/research/cnki-retrieval-manual-digest.md", "reason": "知网官方手册语法事实来源，文档与校验规则不得偏离"}

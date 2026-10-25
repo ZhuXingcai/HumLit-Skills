@@ -114,6 +114,49 @@ do not treat the parameter alone as a permanent gate. A visible challenge still
 wins, but an actually available search/result DOM is evidence that the retained
 parameter is stale and the workflow may continue.
 
+## Scenario: CNKI Retrieval Condition Contract
+
+### 1. Scope / Trigger
+
+- Trigger: a CNKI search builds retrieval conditions, a professional expression,
+  or must report whether the submitted query actually took effect.
+
+### 2. Signatures
+
+- Core model: `core/cnki/query.py` — `CnkiCondition`, `parse_condition`,
+  `validate_conditions`, `validate_professional_expression`, `CnkiQueryError`.
+- Driver: `search.py::_advanced_search(driver, conditions) -> dict` with
+  `{"ok", "applied", "rows", "error"}`; `_professional_search`,
+  `_verify_applied_conditions`, `_read_total_hits`.
+- Output: `retrieval` object on the search payload plus `meta` out-parameter
+  used by `search_cnki` / `batch_search_cnki`.
+
+### 3. Contracts
+
+- Every requested condition must be verified as applied (field select, logic,
+  match mode, and written value) **before** submitting the search.
+- A partially applied multi-condition query is a failure, never a success.
+- `retrieval.verified` is `true` (read-back matched), `false` (mismatch, must
+  carry `CNKI_RETRIEVAL_MISMATCH`), or `null` (page cannot be read). `null`
+  never means verified.
+- `ADV_SEARCH_FALLBACK` is limited to "form unavailable and a keyword exists".
+  It must not swallow per-condition application failures.
+
+### 4. Validation & Error Matrix
+
+- Unknown field / unspaced `* + -` / unbalanced quotes or parentheses / value
+  over 120 chars / match mode on 主题 -> `CNKI_INVALID_EXPRESSION`.
+- More than 10 conditions -> `CNKI_TOO_MANY_CONDITIONS`.
+- Condition not applied -> `CNKI_CONDITION_NOT_APPLIED`.
+- Read-back mismatch -> `CNKI_RETRIEVAL_MISMATCH`.
+- Retrieval arguments on a non-CNKI source -> `CNKI_OPTION_SOURCE_MISMATCH`.
+
+### 5. Tests Required
+
+- `tests/test_cnki_query.py` (pure parsing/validation) and
+  `tests/test_cnki_advanced_contract.py` (fake driver: partial fill, read-back
+  mismatch, unreadable page) must stay offline and deterministic.
+
 ## Reference Examples
 
 - Structured session error: `scripts/cli/_common.py::SessionDataError`

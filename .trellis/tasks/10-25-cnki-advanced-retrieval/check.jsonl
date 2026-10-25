@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/10-25-cnki-advanced-retrieval/prd.md", "reason": "AC1-AC9 验收标准与三层需求边界"}
+{"file": ".trellis/tasks/10-25-cnki-advanced-retrieval/design.md", "reason": "核对实现是否偏离条件模型、错误码与输出合同设计"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "评审测试覆盖与回归要求"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "核对部分失败不得伪装成功或空结果"}
+{"file": ".trellis/tasks/10-25-cnki-advanced-retrieval/research/cnki-retrieval-manual-digest.md", "reason": "核对写入 skill 的语法是否与官方手册一致、存疑处是否标注"}
