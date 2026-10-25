@@ -73,6 +73,11 @@ def search_cnki(
     pages: int = 1,
     cite_enrich: int = 0,
     _keep_driver: bool = False,
+    conditions: Optional[list] = None,
+    professional: Optional[str] = None,
+    match: Optional[str] = None,
+    cross_language: Optional[bool] = None,
+    meta: Optional[Dict[str, Any]] = None,
 ):
     """
     知网文献搜索。
@@ -97,13 +102,69 @@ def search_cnki(
         搜索异常时始终返回:        list[dict] — 含 status=error 的单元素列表
     """
     _log(f"[cnki] 开始搜索: keyword={keyword}, core={core}, "
-         f"year_from={year_from}, doc_type={doc_type}, field={field}")
-    if not str(keyword or "").strip() and not author and not journal:
-        return [{
-            "status": "error",
-            "code": "NO_KEYWORDS",
-            "message": "未提供搜索关键词",
-        }]
+         f"year_from={year_from}, doc_type={doc_type}, field={field}, "
+         f"professional={bool(professional)}, conditions={len(conditions or [])}")
+    from .query import (
+        CnkiQueryError, build_legacy_conditions, normalize_value,
+        validate_conditions, validate_professional_expression, validate_value_syntax,
+    )
+
+    retrieval: Dict[str, Any] = {
+        "source": "cnki",
+        "mode": "simple",
+        "requested": {},
+        "applied": {},
+        "verified": None,
+        "expression": None,
+        "total_hits": None,
+    }
+    active_conditions: List[Any] = []
+    expression: Optional[str] = None
+
+    try:
+        if professional:
+            expression = validate_professional_expression(professional)
+            retrieval["mode"] = "professional"
+            retrieval["expression"] = expression
+            retrieval["requested"] = {"expression": expression}
+        else:
+            legacy_advanced = bool(
+                author or journal or (field and field != "主题") or match
+            )
+            if conditions:
+                active_conditions = validate_conditions(conditions)
+            elif legacy_advanced:
+                active_conditions = validate_conditions(build_legacy_conditions(
+                    keyword, field=field, author=author, journal=journal, match=match,
+                ))
+            if active_conditions:
+                retrieval["mode"] = "advanced"
+                retrieval["requested"] = {
+                    "conditions": [c.to_dict() for c in active_conditions]
+                }
+            else:
+                if not str(keyword or "").strip():
+                    code = "ADV_SEARCH_FALLBACK" if (author or journal) else "NO_KEYWORDS"
+                    message = ("高级搜索未成功且无关键词可回退到简单搜索"
+                               if (author or journal) else "未提供搜索关键词")
+                    if meta is not None:
+                        meta["retrieval"] = retrieval
+                    return [{"status": "error", "code": code, "message": message}]
+                keyword = normalize_value(keyword)
+                validate_value_syntax(keyword)
+                retrieval["requested"] = {
+                    "keyword": keyword, "field": field or "主题",
+                }
+        if cross_language is not None:
+            retrieval["requested"]["cross_language"] = bool(cross_language)
+    except CnkiQueryError as e:
+        error = {"status": "error", "code": e.code, "message": e.message}
+        if e.condition:
+            error["condition"] = e.condition
+        if meta is not None:
+            meta["retrieval"] = retrieval
+        return [error]
+
 
     accessible, msg = check_cnki_access()
     _log(f"[cnki] 网络检测: accessible={accessible}, msg={msg}")
@@ -124,41 +185,86 @@ def search_cnki(
         time.sleep(1)
         _load_cookies(driver)
 
-        use_advanced = bool(author or journal or (field and field != "主题"))
-
-        if use_advanced:
-            _log(f"[cnki] 使用高级搜索: keyword={keyword}, field={field}, "
-                 f"author={author}, journal={journal}")
+        if retrieval["mode"] == "professional":
             driver.get(CNKI_ADV_SEARCH_URL)
             time.sleep(REQUEST_INTERVAL)
             driver = _handle_captcha(driver)
+            if cross_language is not None:
+                retrieval["applied"]["cross_language"] = _set_cross_language(
+                    driver, cross_language
+                )
+            outcome = _professional_search(driver, expression)
+            if not outcome.get("ok"):
+                err = outcome.get("error") or {}
+                raise CnkiRetrievalError(
+                    "CNKI_CONDITION_NOT_APPLIED",
+                    f"专业检索未成功提交: {err.get('message', '未知原因')}",
+                )
 
-            kw_field = field or "主题"
-            conditions = []
-            if keyword:
-                conditions.append((kw_field, keyword))
-            if author:
-                conditions.append(("作者", author))
-            if journal:
-                conditions.append(("来源", journal))
+        elif retrieval["mode"] == "advanced":
+            _log(f"[cnki] 使用高级搜索: {len(active_conditions)} 个条件")
+            driver.get(CNKI_ADV_SEARCH_URL)
+            time.sleep(REQUEST_INTERVAL)
+            driver = _handle_captcha(driver)
+            if cross_language is not None:
+                retrieval["applied"]["cross_language"] = _set_cross_language(
+                    driver, cross_language
+                )
+            outcome = _advanced_search(driver, active_conditions)
+            if outcome.get("ok"):
+                retrieval["applied"]["conditions"] = outcome.get("applied", [])
+            else:
+                err = outcome.get("error") or {}
+                if err.get("code") == "form_not_found":
+                    if str(keyword or "").strip():
+                        _log("[cnki] 高级搜索表单不可用，回退简单搜索（检索范围已变化）")
+                        retrieval["fallback"] = {
+                            "from": "advanced", "reason": err.get("message"),
+                        }
+                        retrieval["mode"] = "simple"
+                        retrieval["requested"] = {
+                            "keyword": keyword, "field": field or "主题",
+                        }
+                    else:
+                        return [{
+                            "status": "error", "code": "ADV_SEARCH_FALLBACK",
+                            "message": "高级搜索未成功且无关键词可回退到简单搜索",
+                        }]
+                else:
+                    raise CnkiRetrievalError(
+                        "CNKI_CONDITION_NOT_APPLIED",
+                        err.get("message", "高级检索条件未成功应用"),
+                    )
 
-            if not _advanced_search(driver, conditions):
-                _log("[cnki] 高级搜索提交失败，回退到简单搜索")
-                use_advanced = False
-
-        if not use_advanced:
-            if not keyword:
-                code = "ADV_SEARCH_FALLBACK" if (author or journal) else "NO_KEYWORDS"
-                msg = ("高级搜索未成功且无关键词可回退到简单搜索"
-                       if (author or journal)
-                       else "未提供搜索关键词")
-                return [{"status": "error", "code": code, "message": msg}]
+        if retrieval["mode"] == "simple":
             _log(f"[cnki] 正在加载搜索页: {CNKI_SEARCH_URL}")
             driver.get(CNKI_SEARCH_URL)
             time.sleep(REQUEST_INTERVAL)
             driver = _handle_captcha(driver)
-
+            if cross_language is not None:
+                retrieval["applied"]["cross_language"] = _set_cross_language(
+                    driver, cross_language
+                )
             _input_search_keyword(driver, keyword)
+
+        def _finalize_retrieval():
+            """结果页就绪后回读检索条件与命中数；不一致必须显式报错。"""
+            if retrieval["mode"] in ("advanced", "professional"):
+                expected = (
+                    [c.value for c in active_conditions]
+                    if active_conditions else [expression]
+                )
+                verification = _verify_applied_conditions(driver, expected)
+                retrieval["verified"] = verification["verified"]
+                if verification.get("raw"):
+                    retrieval["applied"]["raw_text"] = verification["raw"]
+                if verification["verified"] is False:
+                    raise CnkiRetrievalError(
+                        "CNKI_RETRIEVAL_MISMATCH",
+                        "结果页检索条件与请求不一致，未匹配到: "
+                        + "；".join(verification["missing"]),
+                    )
+            retrieval["total_hits"] = _read_total_hits(driver)
 
         time.sleep(REQUEST_INTERVAL)
         driver = _handle_captcha(driver)
@@ -185,10 +291,13 @@ def search_cnki(
                     _cnki_page_diagnostics(driver),
                 )
             _log("[cnki] 已确认知网返回真实空结果页面")
+            _finalize_retrieval()
             if _keep_driver:
                 should_quit = False
                 return [], driver
             return []
+
+        _finalize_retrieval()
 
         if doc_type:
             doc_type_ok = _switch_to_doc_type(driver, doc_type)
@@ -254,6 +363,8 @@ def search_cnki(
         return [{"status": "error", "code": "CNKI_SEARCH_FAILED",
                  "message": str(e)}]
     finally:
+        if meta is not None:
+            meta["retrieval"] = retrieval
         if driver is not None:
             try:
                 _save_cookies(driver)
@@ -294,6 +405,9 @@ def batch_search_cnki(
     year_to: int = None,
     sort: str = "relevance",
     pages: int = 1,
+    match: Optional[str] = None,
+    cross_language: Optional[bool] = None,
+    meta: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     批量知网搜索：一次启动浏览器、一次验证，循环搜索多组关键词。
@@ -329,6 +443,11 @@ def batch_search_cnki(
     errors = []
     empty_keywords = []
     core_filter_results: Dict[str, bool] = {}
+    retrieval_items: List[Dict[str, Any]] = []
+    from .query import (
+        CnkiQueryError, build_legacy_conditions, normalize_value,
+        validate_conditions, validate_value_syntax,
+    )
 
     try:
         browser = _detect_browser()
@@ -345,10 +464,17 @@ def batch_search_cnki(
         _save_cookies(driver)
         _log("[cnki-batch] 浏览器就绪，开始逐组搜索...")
 
-        use_advanced = bool(author or journal or (field and field != "主题"))
+        use_advanced = bool(author or journal or (field and field != "主题") or match)
 
         for idx, keyword in enumerate(keywords):
             _log(f"\n[cnki-batch] === 搜索 {idx + 1}/{len(keywords)}: {keyword} ===")
+            item: Dict[str, Any] = {
+                "keyword": keyword,
+                "mode": "advanced" if use_advanced else "simple",
+                "requested": {}, "applied": {}, "verified": None, "total_hits": None,
+            }
+            retrieval_items.append(item)
+            expected_values: List[str] = []
 
             try:
                 target_url = CNKI_ADV_SEARCH_URL if use_advanced else CNKI_SEARCH_URL
@@ -361,22 +487,44 @@ def batch_search_cnki(
                     time.sleep(REQUEST_INTERVAL)
                     driver = _handle_captcha(driver)
 
+                if cross_language is not None:
+                    item["applied"]["cross_language"] = _set_cross_language(
+                        driver, cross_language
+                    )
+
                 if use_advanced:
-                    kw_field = field or "主题"
-                    conditions = []
-                    if keyword:
-                        conditions.append((kw_field, keyword))
-                    if author:
-                        conditions.append(("作者", author))
-                    if journal:
-                        conditions.append(("来源", journal))
-                    if not _advanced_search(driver, conditions):
-                        _log(f"[cnki-batch] {keyword}: 高级搜索失败，回退简单搜索")
-                        driver.get(CNKI_SEARCH_URL)
-                        time.sleep(REQUEST_INTERVAL)
-                        driver = _handle_captcha(driver)
-                        _input_search_keyword(driver, keyword)
+                    kw_conditions = validate_conditions(build_legacy_conditions(
+                        keyword, field=field, author=author, journal=journal, match=match,
+                    ))
+                    expected_values = [c.value for c in kw_conditions]
+                    item["requested"] = {
+                        "conditions": [c.to_dict() for c in kw_conditions]
+                    }
+                    outcome = _advanced_search(driver, kw_conditions)
+                    if outcome.get("ok"):
+                        item["applied"]["conditions"] = outcome.get("applied", [])
+                    else:
+                        err = outcome.get("error") or {}
+                        if err.get("code") == "form_not_found":
+                            _log(f"[cnki-batch] {keyword}: 高级搜索表单不可用，回退简单搜索")
+                            item["mode"] = "simple"
+                            item["fallback"] = {
+                                "from": "advanced", "reason": err.get("message"),
+                            }
+                            expected_values = []
+                            driver.get(CNKI_SEARCH_URL)
+                            time.sleep(REQUEST_INTERVAL)
+                            driver = _handle_captcha(driver)
+                            _input_search_keyword(driver, keyword)
+                        else:
+                            raise CnkiRetrievalError(
+                                "CNKI_CONDITION_NOT_APPLIED",
+                                err.get("message", "高级检索条件未成功应用"),
+                            )
                 else:
+                    keyword = normalize_value(keyword)
+                    validate_value_syntax(keyword)
+                    item["requested"] = {"keyword": keyword, "field": field or "主题"}
                     _input_search_keyword(driver, keyword)
                 time.sleep(REQUEST_INTERVAL)
                 driver = _handle_captcha(driver)
@@ -405,6 +553,19 @@ def batch_search_cnki(
                     verified_empty = True
                     empty_keywords.append(keyword)
                     _log(f"[cnki-batch] {keyword}: 已确认真实空结果页面")
+
+                if item["mode"] == "advanced" and expected_values:
+                    verification = _verify_applied_conditions(driver, expected_values)
+                    item["verified"] = verification["verified"]
+                    if verification.get("raw"):
+                        item["applied"]["raw_text"] = verification["raw"]
+                    if verification["verified"] is False:
+                        raise CnkiRetrievalError(
+                            "CNKI_RETRIEVAL_MISMATCH",
+                            f"知网搜索 '{keyword}' 的结果页检索条件与请求不一致，未匹配到: "
+                            + "；".join(verification["missing"]),
+                        )
+                item["total_hits"] = _read_total_hits(driver)
 
                 if verified_empty:
                     continue
@@ -461,6 +622,10 @@ def batch_search_cnki(
                     error["diagnostics"] = e.diagnostics
                 errors.append(error)
                 continue
+            except CnkiQueryError as e:
+                _log(f"[cnki-batch] {keyword}: 检索式不合法: {e.message}")
+                errors.append({"keyword": keyword, "code": e.code, "error": e.message})
+                continue
             except Exception as e:
                 err_msg = f"搜索 '{keyword}' 失败: {e}"
                 _log(f"[cnki-batch] {err_msg}")
@@ -499,6 +664,10 @@ def batch_search_cnki(
         return {"status": "error", "code": "CNKI_BATCH_FAILED",
                 "message": str(e)}
     finally:
+        if meta is not None:
+            meta["retrieval"] = {
+                "source": "cnki", "mode": "batch", "queries": retrieval_items,
+            }
         if driver is not None:
             try:
                 _save_cookies(driver)
@@ -579,155 +748,453 @@ def _input_search_keyword(driver, keyword: str):
     search_input.send_keys(Keys.RETURN)
 
 
-# 知网高级搜索字段下拉值映射
+# 知网高级搜索字段下拉值映射（手册 1.2.2.4 的 16 个检索项）
 _ADV_FIELD_MAP = {
     "主题": "SU",
-    "篇名": "TI",
+    "篇关摘": "TKA",
     "关键词": "KY",
-    "摘要": "AB",
+    "篇名": "TI",
     "全文": "FT",
     "作者": "AU",
     "第一作者": "FI",
-    "机构": "AF",
-    "来源": "LY",
+    "通讯作者": "RP",
+    "作者单位": "AF",
     "基金": "FU",
+    "摘要": "AB",
+    "小标题": "CO",
+    "参考文献": "RF",
+    "分类号": "CLC",
+    "文献来源": "LY",
+    "DOI": "DOI",
+}
+
+# 下拉候选值：知网可能使用中文文本或英文值，两者都尝试
+_ADV_LOGIC_MAP = {
+    "并且": ["并且", "AND", "and", "与"],
+    "或者": ["或者", "OR", "or", "或"],
+    "不含": ["不含", "NOT", "not", "非"],
+}
+_ADV_MATCH_MAP = {
+    "精确": ["精确", "exact", "EXACT", "Exact"],
+    "模糊": ["模糊", "fuzzy", "FUZZY", "Fuzzy"],
 }
 
 
-def _advanced_search(
-    driver,
-    conditions: list[tuple[str, str]],
-) -> bool:
-    """在知网高级搜索页面填写多条件表单并提交。
+class CnkiRetrievalError(CnkiSecurityError):
+    """检索条件未按请求应用，或结果页回读与请求不一致。
+
+    继承 CnkiSecurityError 以复用 search/batch 既有的结构化错误出口。
+    """
+
+
+def _advanced_search(driver, conditions) -> Dict[str, Any]:
+    """在知网高级搜索页填写多条件表单并提交，逐条件校验是否真正生效。
 
     Args:
         driver:     已在高级搜索页的浏览器实例
-        conditions: [(字段名, 值), ...]，字段名为中文（主题/作者/来源等）
+        conditions: list[CnkiCondition]
 
     Returns:
-        是否成功提交搜索
+        {"ok": bool, "applied": [...], "rows": [...], "error": {...} | None}
+        error.code 为 form_not_found 时调用方可在有关键词的情况下回退简单搜索；
+        其余失败一律不得静默降级。
     """
     if not conditions:
-        return False
+        return {"ok": False, "applied": [], "rows": [],
+                "error": {"code": "form_not_found", "message": "未提供检索条件"}}
 
-    _log(f"[cnki-adv] 高级搜索条件: {conditions}")
+    payload = []
+    for cond in conditions:
+        payload.append({
+            "field": cond.field,
+            "fieldCode": _ADV_FIELD_MAP.get(cond.field, cond.field),
+            "value": cond.value,
+            "logic": cond.logic,
+            "match": cond.match,
+            "logicCandidates": _ADV_LOGIC_MAP.get(cond.logic, [cond.logic]),
+            "matchCandidates": _ADV_MATCH_MAP.get(cond.match, []) if cond.match else [],
+        })
 
-    set_and_submit_js = r"""
+    _log(f"[cnki-adv] 高级搜索条件: {[(c.field, c.value, c.logic, c.match) for c in conditions]}")
+
+    fill_js = r"""
     var conditions = arguments[0];
-    var fieldMap = arguments[1];
     var results = [];
 
-    // 获取所有条件行
-    var rows = document.querySelectorAll('.sort-list .sort-item, .search-sort .sort-item, [class*="sort-item"]');
-    if (rows.length === 0) {
-        // 备选：通过 input name 模式定位
-        var inputs = document.querySelectorAll('input[name*="txt_"]');
-        if (inputs.length === 0) {
-            return JSON.stringify({status: 'no_rows', message: '未找到高级搜索条件行'});
+    function optionBlob(select) {
+        var parts = [];
+        for (var j = 0; j < select.options.length; j++) {
+            parts.push(((select.options[j].value || '') + ' ' +
+                        (select.options[j].textContent || '')).trim());
         }
+        return parts.join('|');
+    }
+
+    // 通过选项内容识别下拉框用途，不依赖知网的 name/class 命名
+    function classifySelects(row) {
+        var out = {field: null, logic: null, match: null};
+        var selects = row.querySelectorAll('select');
+        for (var i = 0; i < selects.length; i++) {
+            var s = selects[i];
+            var blob = optionBlob(s);
+            if (!out.field && /SU|TI|KY|主题|篇名|关键词/.test(blob)) { out.field = s; continue; }
+            if (!out.logic && /并且|或者|不含|AND|OR|NOT/.test(blob)) { out.logic = s; continue; }
+            if (!out.match && /精确|模糊|exact|fuzzy/i.test(blob)) { out.match = s; continue; }
+        }
+        return out;
+    }
+
+    function setSelect(select, candidates) {
+        if (!select) return {found: false, ok: false};
+        for (var i = 0; i < select.options.length; i++) {
+            var opt = select.options[i];
+            var val = (opt.value || '').trim();
+            var txt = (opt.textContent || '').trim();
+            for (var j = 0; j < candidates.length; j++) {
+                if (val === candidates[j] || txt === candidates[j]) {
+                    select.value = opt.value;
+                    select.dispatchEvent(new Event('change', {bubbles: true}));
+                    return {found: true, ok: select.value === opt.value, chosen: txt};
+                }
+            }
+        }
+        return {found: true, ok: false};
+    }
+
+    function getRows() {
+        return document.querySelectorAll(
+            '.sort-list .sort-item, .search-sort .sort-item, [class*="sort-item"]');
+    }
+
+    var rows = getRows();
+    if (rows.length === 0) {
+        return JSON.stringify({status: 'no_rows', rows: [],
+                               message: '未找到高级搜索条件行'});
     }
 
     for (var i = 0; i < conditions.length; i++) {
-        var fieldName = conditions[i][0];
-        var value = conditions[i][1];
-        var fieldCode = fieldMap[fieldName] || fieldName;
+        var cond = conditions[i];
+        var report = {field: cond.field, value: cond.value, status: 'pending',
+                      field_ok: false, field_assumed: false,
+                      logic_ok: false, match_ok: false, value_ok: false};
 
         if (i > 0) {
-            // 点击"添加条件"按钮增加新行
-            var addBtns = document.querySelectorAll('.btn-add, .add-btn, a[class*="add"], button[class*="add"]');
+            var addBtns = document.querySelectorAll(
+                '.btn-add, .add-btn, a[class*="add"], button[class*="add"]');
+            var clicked = false;
             for (var ab = 0; ab < addBtns.length; ab++) {
-                if (addBtns[ab].offsetParent !== null) {
-                    addBtns[ab].click();
-                    break;
-                }
+                if (addBtns[ab].offsetParent !== null) { addBtns[ab].click(); clicked = true; break; }
             }
+            if (!clicked) report.add_row_clicked = false;
         }
 
-        // 重新获取条件行（可能新增了）
-        rows = document.querySelectorAll('.sort-list .sort-item, .search-sort .sort-item, [class*="sort-item"]');
-        var rowIdx = Math.min(i, rows.length - 1);
-        if (rowIdx < 0) {
-            results.push({field: fieldName, status: 'no_row'});
+        rows = getRows();
+        if (rows.length <= i) {
+            report.status = 'no_row';
+            results.push(report);
             continue;
         }
-        var row = rows[rowIdx];
+        var row = rows[i];
+        var selects = classifySelects(row);
 
-        // 设置字段类型下拉
-        var select = row.querySelector('select, [name*="fieldtype"], [name*="sField"]');
-        if (select) {
-            var options = select.querySelectorAll('option');
-            for (var j = 0; j < options.length; j++) {
-                if (options[j].value === fieldCode ||
-                    options[j].textContent.trim() === fieldName) {
-                    select.value = options[j].value;
-                    select.dispatchEvent(new Event('change', {bubbles: true}));
-                    break;
-                }
-            }
+        if (selects.field) {
+            var fr = setSelect(selects.field, [cond.fieldCode, cond.field]);
+            report.field_ok = fr.ok;
+            report.field_found = fr.found;
+            if (fr.chosen) report.field_chosen = fr.chosen;
+        } else {
+            // 无字段下拉：仅当请求的是默认检索项“主题”时才允许按默认值继续
+            report.field_found = false;
+            report.field_assumed = (cond.field === '主题');
+            report.field_ok = report.field_assumed;
         }
 
-        // 填写搜索值
-        var input = row.querySelector('input[type="text"], input[name*="txt_"], input.search-input');
+        if (i > 0 && cond.logic && cond.logic !== '并且') {
+            var lr = setSelect(selects.logic, cond.logicCandidates);
+            report.logic_ok = lr.ok;
+            report.logic_found = lr.found;
+        } else if (selects.logic) {
+            var lr2 = setSelect(selects.logic, ['并且', 'AND', 'and']);
+            report.logic_ok = lr2.ok;
+            report.logic_found = lr2.found;
+        } else {
+            // 未请求非默认逻辑，且页面无逻辑下拉：按默认“并且”处理但不做成功断言
+            report.logic_ok = false;
+            report.logic_found = false;
+        }
+
+        if (cond.match) {
+            var mr = setSelect(selects.match, cond.matchCandidates);
+            report.match_ok = mr.ok;
+            report.match_found = mr.found;
+        }
+
+        var input = row.querySelector(
+            'input[type="text"], input[name*="txt_"], input.search-input');
         if (input) {
             input.value = '';
-            input.value = value;
+            input.value = cond.value;
             input.dispatchEvent(new Event('input', {bubbles: true}));
             input.dispatchEvent(new Event('change', {bubbles: true}));
-            results.push({field: fieldName, value: value, status: 'filled'});
+            report.value_ok = (input.value === cond.value);
+            report.status = report.value_ok ? 'filled' : 'value_readback_failed';
         } else {
-            results.push({field: fieldName, status: 'no_input'});
+            report.status = 'no_input';
         }
+        results.push(report);
     }
-
-    var filledCount = 0;
-    for (var k = 0; k < results.length; k++) {
-        if (results[k].status === 'filled') filledCount++;
-    }
-    if (filledCount === 0) {
-        return JSON.stringify({status: 'no_filled', rows: results, message: '所有条件均未成功填入'});
-    }
-    return JSON.stringify({status: 'ready', filled: filledCount, rows: results});
+    return JSON.stringify({status: 'done', rows: results});
     """
 
     try:
-        raw = driver.execute_script(set_and_submit_js, conditions, _ADV_FIELD_MAP)
+        raw = driver.execute_script(fill_js, payload)
         info = json.loads(raw) if raw else {}
-        _log(f"[cnki-adv] 表单填写结果: {json.dumps(info, ensure_ascii=False)}")
+    except Exception as e:
+        _log(f"[cnki-adv] 表单填写脚本执行失败: {e}")
+        return {"ok": False, "applied": [], "rows": [],
+                "error": {"code": "form_not_found", "message": str(e)}}
 
-        if info.get("status") != "ready":
-            _log(f"[cnki-adv] 表单填写失败: {info}")
-            return False
+    rows = info.get("rows", []) if isinstance(info, dict) else []
+    _log(f"[cnki-adv] 表单填写结果: {json.dumps(info, ensure_ascii=False)[:1200]}")
 
-        time.sleep(0.5)
+    if info.get("status") == "no_rows" or not rows:
+        return {"ok": False, "applied": [], "rows": rows,
+                "error": {"code": "form_not_found",
+                          "message": info.get("message", "未找到高级搜索条件行")}}
 
-        btn_selectors = [
+    failures = []
+    for idx, row in enumerate(rows):
+        cond = conditions[idx]
+        if row.get("status") != "filled" or not row.get("value_ok"):
+            failures.append(f"{cond.field}：检索词未成功写入（{row.get('status')}）")
+            continue
+        if not row.get("field_ok"):
+            failures.append(f"{cond.field}：字段下拉未设置为请求值")
+        if idx > 0 and cond.logic != "并且" and not row.get("logic_ok"):
+            failures.append(f"{cond.field}：逻辑关系 {cond.logic} 未设置成功")
+        if cond.match and not row.get("match_ok"):
+            failures.append(f"{cond.field}：匹配方式 {cond.match} 未设置成功")
+
+    if failures:
+        return {
+            "ok": False,
+            "applied": [],
+            "rows": rows,
+            "error": {
+                "code": "condition_not_applied",
+                "message": "；".join(failures),
+                "conditions": [c.to_dict() for c in conditions],
+            },
+        }
+
+    time.sleep(0.5)
+    btn_selectors = [
+        (By.CSS_SELECTOR, "input.btn-search, button.btn-search"),
+        (By.CSS_SELECTOR, ".search-btn"),
+        (By.XPATH, "//input[@type='button' and contains(@value,'检索')]"),
+        (By.XPATH, "//button[contains(text(),'检索')]"),
+    ]
+    for by, selector in btn_selectors:
+        try:
+            btn = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((by, selector))
+            )
+            btn.click()
+            _log("[cnki-adv] 已点击检索按钮")
+            return {"ok": True, "applied": [c.to_dict() for c in conditions],
+                    "rows": rows, "error": None}
+        except (TimeoutException, NoSuchElementException):
+            continue
+
+    _log("[cnki-adv] 未找到检索按钮，尝试 Enter 键提交")
+    inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='text']")
+    if inputs:
+        inputs[-1].send_keys(Keys.RETURN)
+        return {"ok": True, "applied": [c.to_dict() for c in conditions],
+                "rows": rows, "error": None}
+
+    return {"ok": False, "applied": [], "rows": rows,
+            "error": {"code": "form_not_found", "message": "未找到高级搜索检索按钮"}}
+
+
+def _professional_search(driver, expression: str) -> Dict[str, Any]:
+    """在高级检索页切换到“专业检索”标签，写入表达式并提交。"""
+    _log(f"[cnki-pro] 专业检索表达式: {expression}")
+    try:
+        tab_xpaths = [
+            "//a[contains(normalize-space(.), '专业检索')]",
+            "//li[contains(normalize-space(.), '专业检索')]",
+            "//button[contains(normalize-space(.), '专业检索')]",
+            "//span[contains(normalize-space(.), '专业检索')]",
+        ]
+        tab = None
+        for xpath in tab_xpaths:
+            try:
+                tab = WebDriverWait(driver, 4).until(
+                    EC.element_to_be_clickable((By.XPATH, xpath))
+                )
+                break
+            except (TimeoutException, NoSuchElementException):
+                continue
+        if tab is None:
+            return {"ok": False,
+                    "error": {"code": "form_not_found", "message": "未找到专业检索标签"}}
+        driver.execute_script("arguments[0].click();", tab)
+        time.sleep(1)
+
+        box = None
+        for selector in ["textarea", "input.professional-input", "input[name*='txt']"]:
+            try:
+                candidates = driver.find_elements(By.CSS_SELECTOR, selector)
+            except NoSuchElementException:
+                continue
+            for el in candidates:
+                try:
+                    if el.is_displayed():
+                        box = el
+                        break
+                except Exception:
+                    continue
+            if box is not None:
+                break
+        if box is None:
+            return {"ok": False,
+                    "error": {"code": "form_not_found", "message": "未找到专业检索输入框"}}
+
+        driver.execute_script(
+            "arguments[0].value = arguments[1];"
+            "arguments[0].dispatchEvent(new Event('input', {bubbles: true}));"
+            "arguments[0].dispatchEvent(new Event('change', {bubbles: true}));",
+            box, expression,
+        )
+        written = box.get_attribute("value") or ""
+        if written.strip() != expression.strip():
+            return {"ok": False,
+                    "error": {"code": "condition_not_applied",
+                              "message": "专业检索表达式写入后回读不一致，未提交"}}
+
+        for by, selector in [
             (By.CSS_SELECTOR, "input.btn-search, button.btn-search"),
             (By.CSS_SELECTOR, ".search-btn"),
             (By.XPATH, "//input[@type='button' and contains(@value,'检索')]"),
             (By.XPATH, "//button[contains(text(),'检索')]"),
-        ]
-        for by, selector in btn_selectors:
+        ]:
             try:
                 btn = WebDriverWait(driver, 5).until(
                     EC.element_to_be_clickable((by, selector))
                 )
                 btn.click()
-                _log("[cnki-adv] 已点击检索按钮")
-                return True
+                _log("[cnki-pro] 已提交专业检索")
+                return {"ok": True, "error": None}
             except (TimeoutException, NoSuchElementException):
                 continue
-
-        _log("[cnki-adv] 未找到检索按钮，尝试 Enter 键提交")
-        rows = driver.find_elements(By.CSS_SELECTOR, "input[type='text']")
-        if rows:
-            rows[-1].send_keys(Keys.RETURN)
-            return True
-
-        return False
-
+        box.send_keys(Keys.RETURN)
+        return {"ok": True, "error": None}
     except Exception as e:
-        _log(f"[cnki-adv] 高级搜索失败: {e}")
-        return False
+        _log(f"[cnki-pro] 专业检索失败: {e}")
+        return {"ok": False, "error": {"code": "form_not_found", "message": str(e)}}
+
+
+def _set_cross_language(driver, enabled: bool) -> Optional[bool]:
+    """设置检索控制区的中英文扩展。返回实际生效值；找不到控件返回 None。"""
+    try:
+        script = r"""
+        var want = arguments[0];
+        var labels = document.querySelectorAll('label, span, div');
+        for (var i = 0; i < labels.length; i++) {
+            var el = labels[i];
+            var text = (el.textContent || '').trim();
+            if (text.length > 40 || text.indexOf('中英文扩展') === -1) continue;
+            var box = el.querySelector('input[type="checkbox"]');
+            if (!box && el.previousElementSibling &&
+                el.previousElementSibling.type === 'checkbox') {
+                box = el.previousElementSibling;
+            }
+            if (!box) {
+                var parent = el.parentElement;
+                if (parent) box = parent.querySelector('input[type="checkbox"]');
+            }
+            if (!box) continue;
+            var before = box.checked;
+            if (before !== want) box.click();
+            return JSON.stringify({found: true, before: before, after: box.checked});
+        }
+        return JSON.stringify({found: false});
+        """
+        raw = driver.execute_script(script, bool(enabled))
+        info = json.loads(raw) if raw else {}
+        if not info.get("found"):
+            _log("[cnki] 未找到中英文扩展控件，保持知网默认")
+            return None
+        _log(f"[cnki] 中英文扩展: {info.get('before')} -> {info.get('after')}")
+        return bool(info.get("after"))
+    except Exception as e:
+        _log(f"[cnki] 设置中英文扩展失败: {e}")
+        return None
+
+
+def _read_applied_conditions(driver) -> Optional[str]:
+    """读取结果页“检索条件显示”区域的文本。读不到返回 None，不猜。"""
+    try:
+        element = WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((
+                By.XPATH,
+                "//*[contains(normalize-space(.), '检索条件') and "
+                "(contains(@class, 'condition') or contains(@class, 'search') "
+                "or self::div or self::span)]",
+            ))
+        )
+        text = (element.text or "").strip()
+        if not text or len(text) > 4000:
+            return None
+        return text
+    except Exception:
+        return None
+
+
+def _read_total_hits(driver) -> Optional[int]:
+    """读取命中数。只在明确的结果计数容器内解析，不在整页正文里猜数字。"""
+    try:
+        raw = driver.execute_script(r"""
+            var selectors = ['.pagerTitleCell', '.result-count', '.total-count',
+                             '.search-result-count', '.result-num', '.count-num'];
+            for (var i = 0; i < selectors.length; i++) {
+                var els = document.querySelectorAll(selectors[i]);
+                for (var j = 0; j < els.length; j++) {
+                    var t = (els[j].textContent || '').trim();
+                    if (t && t.length < 200) return t;
+                }
+            }
+            return '';
+        """)
+        text = (raw or "").strip()
+        if not text:
+            return None
+        match = re.search(r"([0-9][0-9,]*)\s*条", text)
+        if not match:
+            match = re.search(r"共\s*([0-9][0-9,]*)", text)
+        if not match:
+            return None
+        return int(match.group(1).replace(",", ""))
+    except Exception:
+        return None
+
+
+def _normalize_for_verify(text: str) -> str:
+    return re.sub(r"[\s'\"“”‘’]+", "", text or "")
+
+
+def _verify_applied_conditions(driver, expected_values: List[str]) -> Dict[str, Any]:
+    """回读结果页检索条件并比对。返回 {"verified": bool|None, "missing": [...], "raw": ...}"""
+    raw = _read_applied_conditions(driver)
+    if raw is None:
+        return {"verified": None, "missing": [], "raw": None}
+    haystack = _normalize_for_verify(raw)
+    missing = [
+        value for value in expected_values
+        if _normalize_for_verify(value) and _normalize_for_verify(value) not in haystack
+    ]
+    return {"verified": not missing, "missing": missing, "raw": raw[:500]}
 
 
 def _set_year_filter(driver, year_from: int = None, year_to: int = None):
