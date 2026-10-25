@@ -34,7 +34,7 @@ _CNKI_CACHE_TTL_MINUTES = 30
 
 def _cnki_cache_key(args) -> str:
     import hashlib
-    key_parts = f"{args.query}|{args.core}|{args.year_from}|{args.year_to}|{args.author}|{args.journal}|{getattr(args, 'doc_type', '')}|{getattr(args, 'field', '')}|{args.sort}|{args.pages}|{getattr(args, 'cite_enrich', 0)}"
+    key_parts = f"{args.query}|{args.core}|{args.year_from}|{args.year_to}|{args.author}|{args.journal}|{getattr(args, 'doc_type', '')}|{getattr(args, 'field', '')}|{args.sort}|{args.pages}|{getattr(args, 'cite_enrich', 0)}|{getattr(args, 'condition', None) or []}|{getattr(args, 'professional', None) or ''}|{getattr(args, 'match', None) or ''}|{getattr(args, 'cross_language', None) or ''}"
     return hashlib.md5(key_parts.encode()).hexdigest()
 
 
@@ -80,13 +80,48 @@ def cmd_search(args):
                  "message": "--download 仅支持 --source cnki"})
         return
 
+    # 检索式相关参数只对知网生效，且 profession 与 condition 互斥
+    condition_args = getattr(args, "condition", None) or []
+    professional_arg = getattr(args, "professional", None)
+    if (condition_args or professional_arg) and source not in ("cnki", "all"):
+        _output({
+            "status": "error", "code": "CNKI_OPTION_SOURCE_MISMATCH",
+            "message": "--condition / --professional 仅适用于知网（--source cnki 或 all）",
+        })
+        return
+    if condition_args and professional_arg:
+        _output({
+            "status": "error", "code": "CNKI_INVALID_EXPRESSION",
+            "message": "--condition 与 --professional 互斥，请只选择一种检索方式",
+        })
+        return
+    if professional_arg and str(getattr(args, "query", "") or "").strip():
+        _output({
+            "status": "error", "code": "CNKI_INVALID_EXPRESSION",
+            "message": "使用 --professional 时请将位置参数留空（检索式已包含检索词）",
+        })
+        return
+
     results = []
     reuse_driver = None
     cnki_error = None
+    cnki_meta: Dict[str, Any] = {}
     source_statuses: Dict[str, Dict[str, Any]] = {}
 
     if source in ("cnki", "all"):
         from core.cnki import search_cnki
+        from core.cnki.query import CnkiQueryError, parse_condition
+
+        parsed_conditions = []
+        if condition_args:
+            try:
+                parsed_conditions = [parse_condition(item) for item in condition_args]
+            except CnkiQueryError as exc:
+                error = {"status": "error", "code": exc.code, "message": exc.message}
+                if exc.condition:
+                    error["condition"] = exc.condition
+                _output(error)
+                return
 
         # 检查 CNKI 搜索缓存
         cached_cnki = _cnki_cache_get(args) if not want_download else None
@@ -98,8 +133,14 @@ def cmd_search(args):
                 "count": len(cached_cnki),
                 "cached": True,
             }
+            cnki_meta["retrieval"] = {
+                "source": "cnki", "mode": "cached", "cached": True,
+                "requested": {}, "applied": {}, "verified": None,
+                "total_hits": None,
+            }
         else:
             keep = want_download and source == "cnki"
+            cross_language_arg = getattr(args, "cross_language", None)
             cnki_ret = search_cnki(
                 keyword=args.query,
                 core=args.core,
@@ -113,6 +154,13 @@ def cmd_search(args):
                 pages=args.pages or 1,
                 cite_enrich=getattr(args, "cite_enrich", 0),
                 _keep_driver=keep,
+                conditions=parsed_conditions or None,
+                professional=professional_arg,
+                match=getattr(args, "match", None),
+                cross_language=(
+                    None if cross_language_arg is None else cross_language_arg == "on"
+                ),
+                meta=cnki_meta,
             )
             if keep and isinstance(cnki_ret, tuple):
                 cnki_results, reuse_driver = cnki_ret
@@ -135,6 +183,8 @@ def cmd_search(args):
                     if cnki_results[0].get("diagnostics"):
                         source_error["diagnostics"] = cnki_results[0]["diagnostics"]
                     enhanced_error["source_statuses"] = {"cnki": source_error}
+                    if cnki_meta.get("retrieval"):
+                        enhanced_error["retrieval"] = cnki_meta["retrieval"]
                     _output(enhanced_error)
                     if reuse_driver:
                         from core.cnki.driver import _driver_is_reused
@@ -399,6 +449,8 @@ def cmd_search(args):
             "results": deduped,
             "source_statuses": source_statuses,
         }
+        if cnki_meta.get("retrieval"):
+            search_output["retrieval"] = cnki_meta["retrieval"]
         if cnki_error and source == "all":
             search_output["cnki_error"] = {"code": cnki_error.get("code"), "message": cnki_error.get("message")}
         if args.export:
@@ -502,6 +554,8 @@ def cmd_batch_search(args):
                  "message": "未提供关键词"})
         return
 
+    batch_meta: Dict[str, Any] = {}
+    cross_language_arg = getattr(args, "cross_language", None)
     result = batch_search_cnki(
         keywords=keywords,
         core=args.core,
@@ -513,7 +567,14 @@ def cmd_batch_search(args):
         year_to=args.year_to,
         sort=args.sort or "relevance",
         pages=args.pages or 1,
+        match=getattr(args, "match", None),
+        cross_language=(
+            None if cross_language_arg is None else cross_language_arg == "on"
+        ),
+        meta=batch_meta,
     )
+    if batch_meta.get("retrieval"):
+        result["retrieval"] = batch_meta["retrieval"]
 
     if result.get("status") in ("success", "partial") and result.get("results"):
         _save_session(result.get("results") or [], append=args.append, project=_session_project(args))
@@ -597,7 +658,8 @@ def cmd_trends(args):
 
 def add_parser(sub):
     p_search = sub.add_parser("search", help="搜索文献")
-    p_search.add_argument("query", help="搜索关键词")
+    p_search.add_argument("query", nargs="?", default="",
+                          help="搜索关键词（使用 --professional 时可留空）")
     p_search.add_argument("--source", default="cnki",
                           help="数据源: cnki/openalex/semantic/arxiv/nssd/dblp/api/all；base 为实验入口 (默认 cnki)")
     p_search.add_argument("--limit", type=int, default=None, help="结果数量限制（默认 20，多页时自动扩展）")
@@ -609,6 +671,18 @@ def add_parser(sub):
                           help="文献类型筛选: journal/master/doctor/thesis/conference/newspaper")
     p_search.add_argument("--field", default=None,
                           help="搜索字段: 主题(默认)/篇名/关键词/摘要/全文/作者/来源")
+    p_search.add_argument("--condition", action="append", metavar="字段|逻辑|匹配|值",
+                          help="知网高级检索条件，可重复（最多 10 条）。"
+                               "逻辑: 并且/或者/不含；匹配: 精确/模糊（主题只支持相关度匹配）。"
+                               "同字段组合用 * + -，运算符前后各空一格")
+    p_search.add_argument("--professional", metavar="表达式",
+                          help="知网专业检索表达式，如 \"SU %%= 知识管理 AND AU = 邱均平\"；"
+                               "与 --condition 互斥，位置参数需留空")
+    p_search.add_argument("--match", default=None,
+                          help="匹配方式: 精确/模糊（仅用于无 --condition 时的单字段检索；"
+                               "主题不支持）")
+    p_search.add_argument("--cross-language", choices=["on", "off"], default=None,
+                          help="知网检索扩展：on 启用中英文扩展（知网默认），off 关闭")
     p_search.add_argument("--year-from", type=int, help="起始年份")
     p_search.add_argument("--year-to", type=int, help="截止年份")
     p_search.add_argument("--author", help="作者（知网高级搜索）")
@@ -665,6 +739,10 @@ def add_parser(sub):
                          help="搜索字段: 主题(默认)/篇名/关键词/摘要/全文/作者/来源")
     p_batch.add_argument("--author", help="作者（对每组关键词生效）")
     p_batch.add_argument("--journal", help="期刊名（对每组关键词生效）")
+    p_batch.add_argument("--match", default=None,
+                         help="匹配方式: 精确/模糊（对每组关键词的字段生效；主题不支持）")
+    p_batch.add_argument("--cross-language", choices=["on", "off"], default=None,
+                         help="知网检索扩展：on 启用中英文扩展（知网默认），off 关闭")
     p_batch.add_argument("--year-from", type=int, help="起始年份")
     p_batch.add_argument("--year-to", type=int, help="截止年份")
     p_batch.add_argument("--sort", choices=["relevance", "date", "citations", "priority"],
