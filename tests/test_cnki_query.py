@@ -15,6 +15,7 @@ from core.cnki.query import (  # noqa: E402
     CnkiCondition,
     CnkiQueryError,
     build_legacy_conditions,
+    compile_conditions_to_expression,
     join_terms,
     normalize_value,
     parse_condition,
@@ -223,3 +224,74 @@ def test_condition_to_dict_shape():
         "logic": "并且",
         "match": "模糊",
     }
+
+
+# ── 条件编译为专业检索表达式 ─────────────────────────
+
+
+def test_compile_theme_always_uses_related_match():
+    expr = compile_conditions_to_expression([_cond()])
+    assert expr == "SU %= 人工智能"
+
+
+def test_compile_exact_and_fuzzy_operators():
+    assert compile_conditions_to_expression(
+        [_cond(field="篇名", value="乡村振兴", match="精确")]
+    ) == "TI = 乡村振兴"
+    assert compile_conditions_to_expression(
+        [_cond(field="关键词", value="数字乡村", match="模糊")]
+    ) == "KY % 数字乡村"
+
+
+def test_compile_defaults_to_fuzzy_for_non_theme_fields():
+    # 关键词/来源的“精确”是完全一致，未指定时默认模糊才不至于 0 命中
+    assert compile_conditions_to_expression(
+        [_cond(field="文献来源", value="中国社会科学")]
+    ) == "JN % 中国社会科学"
+
+
+def test_compile_groups_or_with_neighbouring_condition():
+    # 知网 AND/OR/NOT 优先级相同，必须显式加括号，否则“或者”会被左结合算错
+    expr = compile_conditions_to_expression([
+        _cond(field="篇名", value="生成式AI"),
+        _cond(field="摘要", value="品牌信任", logic="或者"),
+        _cond(field="关键词", value="广告", logic="并且"),
+    ])
+    # “或者”描述的是它与**前一个**条件的关系
+    assert expr == "(TI % 生成式AI OR AB % 品牌信任) AND KY % 广告"
+
+
+def test_compile_groups_not_with_previous_condition():
+    expr = compile_conditions_to_expression([
+        _cond(field="篇名", value="大数据"),
+        _cond(field="篇名", value="大数据集", logic="不含"),
+    ])
+    assert expr == "(TI % 大数据 NOT TI % 大数据集)"
+
+
+def test_compile_chains_and_conditions_without_parentheses():
+    expr = compile_conditions_to_expression([
+        _cond(field="篇名", value="生成式AI"),
+        _cond(field="关键词", value="广告"),
+    ])
+    assert expr == "TI % 生成式AI AND KY % 广告"
+
+
+def test_compile_quotes_value_with_spaces():
+    expr = compile_conditions_to_expression(
+        [_cond(field="篇名", value="digital library", match="模糊")]
+    )
+    assert expr == "TI % 'digital library'"
+
+
+def test_compile_keeps_field_compound_expression():
+    expr = compile_conditions_to_expression(
+        [_cond(field="篇名", value="(生成式AI + AIGC)", match="模糊")]
+    )
+    assert expr == "TI % (生成式AI + AIGC)"
+
+
+def test_compile_rejects_too_many_conditions():
+    with pytest.raises(CnkiQueryError) as exc:
+        compile_conditions_to_expression([_cond() for _ in range(11)])
+    assert exc.value.code == ERR_TOO_MANY_CONDITIONS

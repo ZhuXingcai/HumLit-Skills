@@ -16,16 +16,26 @@
 
 ### Behavior Change (intentional)
 
-- `_advanced_search` now verifies every requested condition (field, logic,
-  match mode, and written value) before submitting. Previously any single
-  successfully filled row made the whole search count as success, so a request
-  for "A and B and C" could silently run with only "A" applied. Partial
-  application now returns `CNKI_CONDITION_NOT_APPLIED` instead of results.
-- After submission the result page is read back and compared with the request;
-  a mismatch returns `CNKI_RETRIEVAL_MISMATCH`. When the page cannot be read,
-  `retrieval.verified` is `null` rather than claiming success.
-- `ADV_SEARCH_FALLBACK` is now limited to the case where the advanced-search
-  form itself is unavailable and a keyword exists to fall back on.
+- Structured conditions are compiled into a CNKI professional-search expression
+  and executed on the professional search page
+  (`/kns8s/AdvSearch?type=expert`). Live verification showed the advanced-search
+  form uses custom dropdowns with no native `<select>`, so programmatic filling
+  could not reliably set field/logic/match controls; the professional page is a
+  single textarea that can be written and read back.
+- `AND`/`OR`/`NOT` share the same precedence in professional search, so `或者`/
+  `不含` are compiled with explicit parentheses against the neighbouring
+  condition. Without this, `A AND B OR C` evaluates left-to-right.
+- The submitted expression is read back after results render and compared with
+  the request; a mismatch returns `CNKI_RETRIEVAL_MISMATCH`. When readback is
+  impossible, `retrieval.verified` is `null` rather than claiming success.
+- Verified-empty result pages now report `retrieval.total_hits = 0`. CNKI's real
+  empty page reads `抱歉，暂无数据，请稍后重试。`, so `请稍后重试` can no longer
+  veto an explicit "暂无数据" marker — otherwise a legitimate 0-hit query was
+  misreported as an unusable page.
+- Local WebDriver connections now bypass `HTTP_PROXY`/`HTTPS_PROXY` by adding
+  loopback hosts to `NO_PROXY`. In proxied sandboxes Selenium's request to the
+  local driver port was sent to the proxy, which replied `unhandled request`,
+  failing every CNKI command with an unrelated-looking error.
 - New error codes: `CNKI_INVALID_EXPRESSION`, `CNKI_TOO_MANY_CONDITIONS`,
   `CNKI_CONDITION_NOT_APPLIED`, `CNKI_RETRIEVAL_MISMATCH`,
   `CNKI_OPTION_SOURCE_MISMATCH`.

@@ -1,11 +1,12 @@
-"""知网高级检索条件可靠性的离线契约测试。
+"""知网检索执行路径的离线契约测试。
 
-用假 driver 模拟表单填写与结果页回读，不启动浏览器、不触网。
+真机结论（2026-10）：高级检索页的字段/逻辑/匹配是自定义下拉（无原生 select），
+程序化点击无法可靠展开；专业检索是独立页面（/kns8s/AdvSearch?type=expert），
+输入框可写入且提交后保留值。因此结构化条件统一编译为专业检索表达式执行。
+本文件测试该路径的契约，不触网、不启动浏览器。
 """
-import json
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -18,48 +19,33 @@ from core.cnki import search as search_module  # noqa: E402
 from core.cnki.query import CnkiCondition  # noqa: E402
 from core.cnki.search import (  # noqa: E402
     CnkiRetrievalError,
-    _advanced_search,
     _professional_search,
     _read_total_hits,
-    _verify_applied_conditions,
+    _verify_professional_expression,
 )
 
 
-class FakeElement:
-    def __init__(self, text="", value=""):
-        self.text = text
-        self._value = value
-        self.clicked = 0
+class FakeBox:
+    """模拟专业检索输入框；ignore_writes=True 模拟写入不生效。"""
 
-    def click(self):
-        self.clicked += 1
+    def __init__(self, value: str = "", ignore_writes: bool = False):
+        self._value = value
+        self.ignore_writes = ignore_writes
 
     def get_attribute(self, name):
         return self._value if name == "value" else None
 
-    def is_displayed(self):
-        return True
-
-
-class FakeWait:
-    """替代 WebDriverWait：until() 直接返回预置元素。"""
-
-    element = None
-
-    def __init__(self, driver, timeout=None):
-        self.driver = driver
-
-    def until(self, _condition):
-        return FakeWait.element
+    def write(self, value: str):
+        if not self.ignore_writes:
+            self._value = value
 
 
 class FakeDriver:
-    def __init__(self, script_returns=None):
-        self.script_returns = list(script_returns or [])
-        self.scripts = []
+    def __init__(self, box=None, submit_ok=True):
+        self.box = box
+        self.submit_ok = submit_ok
         self.visited = []
-        self.current_url = "https://kns.cnki.net/kns8s/search"
-        self.title = "CNKI"
+        self.submitted = False
 
     def get(self, url):
         self.visited.append(url)
@@ -68,153 +54,78 @@ class FakeDriver:
         pass
 
     def execute_script(self, script, *args):
-        self.scripts.append((script, args))
-        if self.script_returns:
-            return self.script_returns.pop(0)
+        if "textarea.majorSearch" in script:
+            return self.box
+        if "input.btn-search" in script and "indexOf('检索')" in script:
+            self.submitted = True
+            return self.submit_ok
+        if "arguments[0].value = arguments[1]" in script:
+            if self.box is not None:
+                self.box.write(args[1])
+            return None
         return None
 
-    def find_elements(self, by, selector):
-        return []
+
+# ── 专业检索提交 ─────────────────────────────────────
 
 
-@pytest.fixture(autouse=True)
-def _patch_wait(monkeypatch):
-    monkeypatch.setattr(search_module, "WebDriverWait", FakeWait)
-    monkeypatch.setattr(search_module.time, "sleep", lambda *_: None)
-    FakeWait.element = FakeElement(text="共 1,234 条结果")
-    yield
-
-
-def _rows(*statuses):
-    """构造 JS 返回的逐行结果。"""
-    rows = []
-    for index, status in enumerate(statuses):
-        rows.append({
-            "field": "篇名",
-            "value": f"v{index}",
-            "status": status,
-            "field_ok": status == "filled",
-            "logic_ok": True,
-            "match_ok": True,
-            "value_ok": status == "filled",
-        })
-    return json.dumps({"status": "done", "rows": rows})
-
-
-# ── 表单填写与逐条件校验 ──────────────────────────────
-
-
-def test_all_conditions_applied_returns_ok():
-    driver = FakeDriver([_rows("filled", "filled")])
-    conds = [
-        CnkiCondition(field="篇名", value="人工智能"),
-        CnkiCondition(field="关键词", value="教育", logic="并且"),
-    ]
-    outcome = _advanced_search(driver, conds)
+def test_professional_search_writes_and_submits():
+    box = FakeBox()
+    driver = FakeDriver(box=box)
+    outcome = _professional_search(driver, "SU %= 知识管理")
     assert outcome["ok"] is True
-    assert outcome["error"] is None
-    assert [c["field"] for c in outcome["applied"]] == ["篇名", "关键词"]
+    assert outcome["written"] == "SU %= 知识管理"
+    assert driver.submitted is True
+    assert box.get_attribute("value") == "SU %= 知识管理"
 
 
-def test_partial_fill_is_reported_not_silently_accepted():
-    # 第二个条件检索词没写进去：旧实现会判成功，新实现必须失败
-    driver = FakeDriver([_rows("filled", "no_input")])
-    conds = [
-        CnkiCondition(field="篇名", value="人工智能"),
-        CnkiCondition(field="摘要", value="教育"),
-    ]
-    outcome = _advanced_search(driver, conds)
-    assert outcome["ok"] is False
-    assert outcome["error"]["code"] == "condition_not_applied"
-    assert "摘要" in outcome["error"]["message"]
-
-
-def test_field_not_set_is_reported():
-    rows = json.loads(_rows("filled"))
-    rows["rows"][0]["field_ok"] = False
-    driver = FakeDriver([json.dumps(rows)])
-    outcome = _advanced_search(
-        driver, [CnkiCondition(field="篇名", value="人工智能")]
-    )
-    assert outcome["ok"] is False
-    assert "字段下拉" in outcome["error"]["message"]
-
-
-def test_requested_logic_must_be_applied():
-    rows = json.loads(_rows("filled", "filled"))
-    rows["rows"][1]["logic_ok"] = False
-    driver = FakeDriver([json.dumps(rows)])
-    conds = [
-        CnkiCondition(field="篇名", value="人工智能"),
-        CnkiCondition(field="摘要", value="教育", logic="或者"),
-    ]
-    outcome = _advanced_search(driver, conds)
-    assert outcome["ok"] is False
-    assert "逻辑关系" in outcome["error"]["message"]
-
-
-def test_requested_match_must_be_applied():
-    rows = json.loads(_rows("filled"))
-    rows["rows"][0]["match_ok"] = False
-    driver = FakeDriver([json.dumps(rows)])
-    outcome = _advanced_search(
-        driver, [CnkiCondition(field="篇名", value="人工智能", match="精确")]
-    )
-    assert outcome["ok"] is False
-    assert "匹配方式" in outcome["error"]["message"]
-
-
-def test_no_rows_reports_form_not_found():
-    driver = FakeDriver([json.dumps({"status": "no_rows", "rows": [],
-                                     "message": "未找到高级搜索条件行"})])
-    outcome = _advanced_search(
-        driver, [CnkiCondition(field="篇名", value="人工智能")]
-    )
+def test_professional_search_reports_missing_box():
+    outcome = _professional_search(FakeDriver(box=None), "SU %= 知识管理")
     assert outcome["ok"] is False
     assert outcome["error"]["code"] == "form_not_found"
 
 
-def test_default_logic_is_not_asserted_when_control_absent():
-    """首行逻辑为默认“并且”时不因缺少逻辑下拉而失败。"""
-    rows = json.loads(_rows("filled"))
-    rows["rows"][0]["logic_ok"] = False
-    driver = FakeDriver([json.dumps(rows)])
-    outcome = _advanced_search(
-        driver, [CnkiCondition(field="篇名", value="人工智能")]
+def test_professional_search_detects_writeback_mismatch():
+    box = FakeBox(value="", ignore_writes=True)
+    outcome = _professional_search(FakeDriver(box=box), "SU %= 知识管理")
+    assert outcome["ok"] is False
+    assert outcome["error"]["code"] == "condition_not_applied"
+    assert "回读不一致" in outcome["error"]["message"]
+
+
+def test_professional_search_reports_missing_button():
+    outcome = _professional_search(
+        FakeDriver(box=FakeBox(), submit_ok=False), "SU %= 知识管理"
     )
-    assert outcome["ok"] is True
+    assert outcome["ok"] is False
+    assert outcome["error"]["code"] == "form_not_found"
+    assert "检索按钮" in outcome["error"]["message"]
 
 
 # ── 结果页回读校验 ───────────────────────────────────
 
 
-def test_verify_passes_when_all_values_present():
-    FakeWait.element = FakeElement(text="检索条件：篇名=人工智能 AND 摘要=教育")
-    result = _verify_applied_conditions(FakeDriver(), ["人工智能", "教育"])
+def test_verify_passes_on_identical_expression():
+    box = FakeBox(value="SU %= 知识管理")
+    result = _verify_professional_expression(FakeDriver(box=box), "SU %= 知识管理")
     assert result["verified"] is True
-    assert result["missing"] == []
 
 
-def test_verify_detects_missing_value():
-    FakeWait.element = FakeElement(text="检索条件：篇名=人工智能")
-    result = _verify_applied_conditions(FakeDriver(), ["人工智能", "教育"])
+def test_verify_ignores_whitespace_differences():
+    box = FakeBox(value="SU   %=   知识管理")
+    result = _verify_professional_expression(FakeDriver(box=box), "SU %= 知识管理")
+    assert result["verified"] is True
+
+
+def test_verify_detects_different_expression():
+    box = FakeBox(value="SU %= 信息管理")
+    result = _verify_professional_expression(FakeDriver(box=box), "SU %= 知识管理")
     assert result["verified"] is False
-    assert result["missing"] == ["教育"]
+    assert result["actual"] == "SU %= 信息管理"
 
 
-def test_verify_returns_none_when_page_cannot_be_read():
-    class BrokenWait:
-        def __init__(self, driver, timeout=None):
-            pass
-
-        def until(self, _condition):
-            raise search_module.TimeoutException("no element")
-
-    search_module.WebDriverWait = BrokenWait
-    try:
-        result = _verify_applied_conditions(FakeDriver(), ["人工智能"])
-    finally:
-        search_module.WebDriverWait = FakeWait
+def test_verify_returns_none_when_box_missing():
+    result = _verify_professional_expression(FakeDriver(box=None), "SU %= 知识管理")
     assert result["verified"] is None
 
 
@@ -224,61 +135,97 @@ def test_verify_returns_none_when_page_cannot_be_read():
 @pytest.mark.parametrize(
     "text, expected",
     [
+        ("共找到\n            50,940\n            条结果", 50940),
         ("共 1,234 条结果", 1234),
-        ("共找到 56 条结果", 56),
         ("", None),
         ("没有数字", None),
     ],
 )
 def test_read_total_hits(text, expected):
-    driver = FakeDriver([text])
+    driver = FakeDriver(box=FakeBox())
+    driver.execute_script = lambda script, *args: text
     assert _read_total_hits(driver) == expected
 
 
-# ── search_cnki 不得把条件失败伪装成成功 ───────────────
+# ── search_cnki 端到端契约（假 driver） ───────────────
 
 
-def _patch_search_env(monkeypatch, advanced_outcome):
+class _ImmediateWait:
+    def __init__(self, driver, timeout=None):
+        pass
+
+    def until(self, _condition):
+        return True
+
+
+def _patch_env(monkeypatch, professional_outcome, driver=None):
+    driver = driver or FakeDriver(box=FakeBox())
     monkeypatch.setattr(search_module, "check_cnki_access", lambda: (True, "ok"))
     monkeypatch.setattr(search_module, "_detect_browser", lambda: "edge")
-    monkeypatch.setattr(
-        search_module, "_create_driver", lambda browser=None: FakeDriver()
-    )
-    monkeypatch.setattr(search_module, "_load_cookies", lambda driver: None)
-    monkeypatch.setattr(search_module, "_save_cookies", lambda driver: None)
-    monkeypatch.setattr(search_module, "_handle_captcha", lambda driver: driver)
-    monkeypatch.setattr(search_module, "_driver_is_reused", lambda driver: True)
-    monkeypatch.setattr(
-        search_module, "_advanced_search", lambda driver, conds: advanced_outcome
-    )
+    monkeypatch.setattr(search_module, "_create_driver", lambda browser=None: driver)
+    monkeypatch.setattr(search_module, "_load_cookies", lambda d: None)
+    monkeypatch.setattr(search_module, "_save_cookies", lambda d: None)
+    monkeypatch.setattr(search_module, "_handle_captcha", lambda d: d)
+    monkeypatch.setattr(search_module, "_driver_is_reused", lambda d: True)
+    monkeypatch.setattr(search_module.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(search_module, "_professional_search",
+                        lambda d, expr: professional_outcome)
+    monkeypatch.setattr(search_module, "WebDriverWait", _ImmediateWait)
+    monkeypatch.setattr(search_module, "_classify_result_page", lambda d: "results")
+    monkeypatch.setattr(search_module, "_parse_search_results",
+                        lambda d, cite_enrich=0: [])
+    monkeypatch.setattr(search_module, "_go_next_page", lambda d: None)
+    monkeypatch.setattr(search_module, "_filter_by_year", lambda rows, a, b: rows)
+    monkeypatch.setattr(search_module, "_read_total_hits", lambda d: 42)
+    monkeypatch.setattr(search_module, "_verify_professional_expression",
+                        lambda d, expr: {"verified": True, "actual": expr})
+    return driver
 
 
-def test_search_cnki_raises_on_unapplied_condition(monkeypatch):
-    _patch_search_env(monkeypatch, {
-        "ok": False, "applied": [], "rows": [],
-        "error": {"code": "condition_not_applied", "message": "摘要：检索词未成功写入"},
-    })
+def test_conditions_are_compiled_to_expression(monkeypatch):
+    _patch_env(monkeypatch, {"ok": True, "written": "x", "error": None})
     meta = {}
-    results = search_module.search_cnki(
+    search_module.search_cnki(
         "",
         conditions=[
-            CnkiCondition(field="篇名", value="人工智能"),
-            CnkiCondition(field="摘要", value="教育"),
+            CnkiCondition(field="篇名", value="生成式AI"),
+            CnkiCondition(field="关键词", value="广告", match="模糊"),
+            CnkiCondition(field="摘要", value="品牌信任", logic="或者"),
+            CnkiCondition(field="文献来源", value="新闻与传播研究", logic="并且"),
         ],
         meta=meta,
     )
+    retrieval = meta["retrieval"]
+    assert retrieval["mode"] == "advanced"
+    compiled = retrieval["compiled_expression"]
+    assert compiled == (
+        "TI % 生成式AI AND (KY % 广告 OR AB % 品牌信任) AND JN % 新闻与传播研究"
+    )
+    assert retrieval["applied"]["expression"] == compiled
+    assert retrieval["verified"] is True
+    assert retrieval["total_hits"] == 42
+
+
+def test_failed_compiled_submission_is_not_silently_accepted(monkeypatch):
+    _patch_env(monkeypatch, {
+        "ok": False,
+        "error": {"code": "condition_not_applied", "message": "表达式写入后回读不一致"},
+    })
+    meta = {}
+    results = search_module.search_cnki(
+        "", conditions=[CnkiCondition(field="篇名", value="生成式AI")], meta=meta,
+    )
     assert results[0]["status"] == "error"
     assert results[0]["code"] == "CNKI_CONDITION_NOT_APPLIED"
-    assert "摘要" in results[0]["message"]
     assert meta["retrieval"]["mode"] == "advanced"
 
 
-def test_search_cnki_reports_invalid_condition_before_browser(monkeypatch):
+def test_invalid_condition_fails_before_browser(monkeypatch):
     called = {"created": False}
 
     def _boom(browser=None):
         called["created"] = True
-        return FakeDriver()
+        return FakeDriver(box=FakeBox())
 
     monkeypatch.setattr(search_module, "_create_driver", _boom)
     results = search_module.search_cnki(
@@ -288,7 +235,7 @@ def test_search_cnki_reports_invalid_condition_before_browser(monkeypatch):
     assert called["created"] is False
 
 
-def test_search_cnki_no_keywords_still_reported(monkeypatch):
+def test_no_keywords_still_reported():
     results = search_module.search_cnki("")
     assert results[0]["code"] == "NO_KEYWORDS"
 
@@ -299,32 +246,11 @@ def test_retrieval_error_is_structured():
     assert isinstance(exc, search_module.CnkiSecurityError)
 
 
-# ── 专业检索 ─────────────────────────────────────────
-
-
-def test_professional_search_reports_missing_box():
-    driver = FakeDriver()
-    outcome = _professional_search(driver, "SU %= 知识管理")
-    assert outcome["ok"] is False
-    assert outcome["error"]["code"] == "form_not_found"
-
-
-def test_professional_search_detects_writeback_mismatch(monkeypatch):
-    box = FakeElement(text="", value="别的表达式")
-
-    class TabWait:
-        def __init__(self, driver, timeout=None):
-            pass
-
-        def until(self, _condition):
-            return FakeElement()
-
-    monkeypatch.setattr(search_module, "WebDriverWait", TabWait)
-
-    class Driver(FakeDriver):
-        def find_elements(self, by, selector):
-            return [box] if selector == "textarea" else []
-
-    outcome = _professional_search(Driver(), "SU %= 知识管理")
-    assert outcome["ok"] is False
-    assert outcome["error"]["code"] == "condition_not_applied"
+def test_professional_mode_uses_expert_url(monkeypatch):
+    driver = _patch_env(
+        monkeypatch,
+        {"ok": False, "error": {"code": "form_not_found",
+                                "message": "未找到专业检索输入框"}},
+    )
+    search_module.search_cnki("", professional="SU %= 知识管理")
+    assert any("type=expert" in url for url in driver.visited)

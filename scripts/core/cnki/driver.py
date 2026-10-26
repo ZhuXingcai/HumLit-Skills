@@ -680,6 +680,27 @@ def _find_local_driver(browser: str) -> Optional[str]:
     return None
 
 
+_LOCAL_NO_PROXY_HOSTS = ("127.0.0.1", "localhost", "::1")
+
+
+def _ensure_local_proxy_bypass() -> None:
+    """让本地 WebDriver 连接绕过 HTTP 代理。
+
+    Selenium 通过 HTTP 与本地 WebDriver 端口通信。若进程中设置了
+    HTTP_PROXY/HTTPS_PROXY（托管沙箱、公司代理常见），该请求会被转发给代理，
+    代理不认识 WebDriver 协议，只回 `unhandled request`，表现为“所有知网命令失败”。
+    这里把回环地址补进 NO_PROXY，页面本身的访问仍走原代理。
+    """
+    current = os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or ""
+    hosts = [item.strip() for item in current.split(",") if item.strip()]
+    missing = [host for host in _LOCAL_NO_PROXY_HOSTS if host not in hosts]
+    if not missing:
+        return
+    merged = ",".join(hosts + missing)
+    os.environ["NO_PROXY"] = merged
+    os.environ["no_proxy"] = merged
+
+
 def _create_driver(
     browser: str = None,
     headless: bool = False,
@@ -692,6 +713,7 @@ def _create_driver(
             "Selenium 4.10+ 会自动管理 WebDriver，无需手动下载。"
         )
 
+    _ensure_local_proxy_bypass()
     _ensure_selenium_cache()
 
     if browser is None:

@@ -34,7 +34,19 @@ _CNKI_CACHE_TTL_MINUTES = 30
 
 def _cnki_cache_key(args) -> str:
     import hashlib
-    key_parts = f"{args.query}|{args.core}|{args.year_from}|{args.year_to}|{args.author}|{args.journal}|{getattr(args, 'doc_type', '')}|{getattr(args, 'field', '')}|{args.sort}|{args.pages}|{getattr(args, 'cite_enrich', 0)}|{getattr(args, 'condition', None) or []}|{getattr(args, 'professional', None) or ''}|{getattr(args, 'match', None) or ''}|{getattr(args, 'cross_language', None) or ''}"
+    # 条件会先编译成专业检索表达式，编译规则变化必须让缓存失效，
+    # 因此把编译结果一并纳入键（编译是纯函数，不触网）。
+    compiled = ""
+    raw_conditions = getattr(args, "condition", None) or []
+    if raw_conditions:
+        try:
+            from core.cnki.query import compile_conditions_to_expression, parse_condition
+            compiled = compile_conditions_to_expression(
+                [parse_condition(item) for item in raw_conditions]
+            )
+        except Exception:
+            compiled = "|".join(str(item) for item in raw_conditions)
+    key_parts = f"{args.query}|{args.core}|{args.year_from}|{args.year_to}|{args.author}|{args.journal}|{getattr(args, 'doc_type', '')}|{getattr(args, 'field', '')}|{args.sort}|{args.pages}|{getattr(args, 'cite_enrich', 0)}|{raw_conditions}|{compiled}|{getattr(args, 'professional', None) or ''}|{getattr(args, 'match', None) or ''}|{getattr(args, 'cross_language', None) or ''}"
     return hashlib.md5(key_parts.encode()).hexdigest()
 
 
@@ -434,6 +446,8 @@ def cmd_search(args):
                     "results": [],
                     "source_statuses": source_statuses,
                 }
+                if cnki_meta.get("retrieval"):
+                    no_results_error["retrieval"] = cnki_meta["retrieval"]
                 _output(_enhance_error(no_results_error, {"query": args.query}))
             return
 

@@ -12,6 +12,9 @@ except ImportError:
 
 CNKI_SEARCH_URL = "https://kns.cnki.net/kns8s/search"
 CNKI_ADV_SEARCH_URL = "https://kns.cnki.net/kns8s/AdvSearch"
+# 专业检索是独立页面（高级检索页的“专业检索”标签指向该 URL，且 target=_blank），
+# 直接导航比点击标签更可靠。实测路径，2026-10。
+CNKI_EXPERT_SEARCH_URL = "https://kns.cnki.net/kns8s/AdvSearch?type=expert"
 
 
 def _get_request_interval() -> int:

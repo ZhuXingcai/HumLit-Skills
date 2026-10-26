@@ -124,23 +124,29 @@ parameter is stale and the workflow may continue.
 ### 2. Signatures
 
 - Core model: `core/cnki/query.py` — `CnkiCondition`, `parse_condition`,
-  `validate_conditions`, `validate_professional_expression`, `CnkiQueryError`.
-- Driver: `search.py::_advanced_search(driver, conditions) -> dict` with
-  `{"ok", "applied", "rows", "error"}`; `_professional_search`,
-  `_verify_applied_conditions`, `_read_total_hits`.
+  `validate_conditions`, `compile_conditions_to_expression`,
+  `validate_professional_expression`, `CnkiQueryError`.
+- Driver: `search.py::_professional_search(driver, expression) -> dict` with
+  `{"ok", "written", "error"}`, `_read_professional_expression`,
+  `_verify_professional_expression`, `_read_total_hits`.
 - Output: `retrieval` object on the search payload plus `meta` out-parameter
   used by `search_cnki` / `batch_search_cnki`.
 
 ### 3. Contracts
 
-- Every requested condition must be verified as applied (field select, logic,
-  match mode, and written value) **before** submitting the search.
-- A partially applied multi-condition query is a failure, never a success.
+- Conditions are compiled into a professional-search expression and submitted on
+  `CNKI_EXPERT_SEARCH_URL`; the compiled expression must be surfaced in
+  `retrieval.expression` so callers can replay it on CNKI.
+- The expression written into the textarea must be read back before submitting;
+  a writeback mismatch is a failure, never a silent partial query.
+- `AND`/`OR`/`NOT` share one precedence level in CNKI professional search, so
+  `或者`/`不含` must be compiled with explicit parentheses.
 - `retrieval.verified` is `true` (read-back matched), `false` (mismatch, must
-  carry `CNKI_RETRIEVAL_MISMATCH`), or `null` (page cannot be read). `null`
+  carry `CNKI_RETRIEVAL_MISMATCH`), or `null` (readback impossible). `null`
   never means verified.
-- `ADV_SEARCH_FALLBACK` is limited to "form unavailable and a keyword exists".
-  It must not swallow per-condition application failures.
+- A verified-empty page reports `total_hits = 0`; `null` means unreadable.
+  CNKI's genuine empty page includes the text `请稍后重试`, so that phrase alone
+  must not veto an explicit `暂无数据` marker.
 
 ### 4. Validation & Error Matrix
 

@@ -290,6 +290,69 @@ def build_legacy_conditions(
 
 
 _PRO_FIELD_PATTERN = re.compile(r"[A-Z]{1,4}\s*(?:%=|=|%)")
+
+# 专业检索字段代码（手册 1.2.5.2；文献来源在专业检索中用 JN）
+_PRO_FIELD_CODES = {
+    "主题": "SU", "篇关摘": "TKA", "关键词": "KY", "篇名": "TI", "全文": "FT",
+    "作者": "AU", "第一作者": "FI", "通讯作者": "RP", "作者单位": "AF",
+    "基金": "FU", "摘要": "AB", "小标题": "CO", "参考文献": "RF",
+    "分类号": "CLC", "文献来源": "JN", "DOI": "DOI",
+}
+
+_PRO_LOGIC = {"并且": "AND", "或者": "OR", "不含": "NOT"}
+
+
+def _pro_match_operator(field_name: str, match: Optional[str]) -> str:
+    """主题只能用相关匹配 %=；未指定匹配方式时默认模糊，避免完全一致导致 0 命中。"""
+    if field_name in RELATED_ONLY_FIELDS:
+        return "%="
+    return "=" if match == "精确" else "%"
+
+
+def _pro_value(value: str) -> str:
+    """按手册 1.2.5 处理检索值：复合运算用括号，含空格的词组用单引号。
+
+    注意不能把 `(A + B)` 整体加引号——那样会被当成一个字符串常量，语义就变了。
+    """
+    text = (value or "").strip()
+    if not text:
+        raise CnkiQueryError(ERR_INVALID_EXPRESSION, "检索词不能为空")
+    if any(ch in text for ch in "()*+"):
+        # 已经是同字段组合表达式，按原样传递，由其内部运算符决定语义
+        return text
+    if any(ch.isspace() for ch in text):
+        return "'" + text.replace("'", "") + "'"
+    return text
+
+
+def compile_conditions_to_expression(conditions: Sequence[CnkiCondition]) -> str:
+    """把结构化条件编译为知网专业检索表达式。
+
+    为什么用编译而不是填高级检索表单：知网高级检索页的字段/逻辑/匹配控件是
+    自定义下拉（div.sort + ul.sort-list），无原生 select，程序化点击无法可靠展开；
+    专业检索页是单个文本框，实测可写入、可回读、表达式能力更强。
+    字段代码与匹配符映射严格按官方手册，不改变用户语义。
+    """
+    validated = validate_conditions(conditions)
+
+    def render(cond: CnkiCondition) -> str:
+        code = _PRO_FIELD_CODES[cond.field]
+        operator = _pro_match_operator(cond.field, cond.match)
+        return f"{code} {operator} {_pro_value(cond.value)}"
+
+    # 知网专业检索里 AND/OR/NOT 优先级相同（手册 1.2.5.5），必须显式加括号。
+    # 语义：某条件标“或者/不含”时，表示它与紧邻的上一个条件构成一个分组。
+    segments: List[str] = [render(validated[0])]
+    for cond in validated[1:]:
+        current = render(cond)
+        if cond.logic == "并且":
+            segments.append(current)
+        elif cond.logic == "或者":
+            segments[-1] = f"({segments[-1]} OR {current})"
+        else:  # 不含
+            segments[-1] = f"({segments[-1]} NOT {current})"
+    expression = " AND ".join(segments)
+    return validate_professional_expression(expression)
 _PRO_COMPARE_PATTERN = re.compile(r"\b(?:YE|CF)\b\s*(?:BETWEEN|>=|<=|>|<)", re.I)
 
 

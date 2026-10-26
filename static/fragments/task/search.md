@@ -95,8 +95,9 @@ Agent 的职责是从用户自然语言中提取作者/期刊名/文献类型/�
 `batch-search` 是**多次独立检索**，不能表达"A 且 B"；需要交集时用 `--condition` 或
 `--professional`。
 
-输出中的 `retrieval` 必须核对：`applied` 是实际生效的条件，`verified=false` 表示回读不一致
-（结果不可信），`total_hits` 是迭代宽窄的唯一依据。
+输出中的 `retrieval` 必须核对：`expression` 是实际提交的检索式（可直接在知网复核），
+`applied` 是实际生效的条件，`verified=false` 表示回读不一致（结果不可信），
+`total_hits` 是迭代宽窄的唯一依据（`0` 表示已确认真实空结果，`null` 才是读不到）。
 
 ## 检索优先级机制
 
