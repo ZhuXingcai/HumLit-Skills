@@ -186,14 +186,27 @@ def search_cnki(
         time.sleep(1)
         _load_cookies(driver)
 
+        def _apply_cross_language():
+            """显式请求了中英文扩展时才操作；未生效必须留痕，不能静默。"""
+            if cross_language is None:
+                return
+            actual = _set_cross_language(driver, cross_language)
+            retrieval["applied"]["cross_language"] = actual
+            if actual is None:
+                retrieval.setdefault("notes", []).append(
+                    "中英文扩展仅高级/专业检索页提供，本次请求未生效；"
+                    "需要控制它请改用 --condition 或 --professional"
+                )
+            elif actual != bool(cross_language):
+                retrieval.setdefault("notes", []).append(
+                    f"中英文扩展未能切换到 {bool(cross_language)}，当前为 {actual}"
+                )
+
         if retrieval["mode"] == "professional":
             driver.get(CNKI_EXPERT_SEARCH_URL)
             time.sleep(REQUEST_INTERVAL)
             driver = _handle_captcha(driver)
-            if cross_language is not None:
-                retrieval["applied"]["cross_language"] = _set_cross_language(
-                    driver, cross_language
-                )
+            _apply_cross_language()
             outcome = _professional_search(driver, expression)
             if not outcome.get("ok"):
                 err = outcome.get("error") or {}
@@ -213,10 +226,7 @@ def search_cnki(
             driver.get(CNKI_EXPERT_SEARCH_URL)
             time.sleep(REQUEST_INTERVAL)
             driver = _handle_captcha(driver)
-            if cross_language is not None:
-                retrieval["applied"]["cross_language"] = _set_cross_language(
-                    driver, cross_language
-                )
+            _apply_cross_language()
             outcome = _professional_search(driver, expression)
             if not outcome.get("ok"):
                 err = outcome.get("error") or {}
@@ -231,10 +241,7 @@ def search_cnki(
             driver.get(CNKI_SEARCH_URL)
             time.sleep(REQUEST_INTERVAL)
             driver = _handle_captcha(driver)
-            if cross_language is not None:
-                retrieval["applied"]["cross_language"] = _set_cross_language(
-                    driver, cross_language
-                )
+            _apply_cross_language()
             _input_search_keyword(driver, keyword)
 
         def _finalize_retrieval(empty: bool = False):
@@ -479,9 +486,12 @@ def batch_search_cnki(
                     driver = _handle_captcha(driver)
 
                 if cross_language is not None:
-                    item["applied"]["cross_language"] = _set_cross_language(
-                        driver, cross_language
-                    )
+                    actual_cross = _set_cross_language(driver, cross_language)
+                    item["applied"]["cross_language"] = actual_cross
+                    if actual_cross is None:
+                        item.setdefault("notes", []).append(
+                            "中英文扩展仅高级/专业检索页提供，本次请求未生效"
+                        )
 
                 if use_advanced:
                     kw_conditions = validate_conditions(build_legacy_conditions(
@@ -812,35 +822,36 @@ def _professional_search(driver, expression: str) -> Dict[str, Any]:
 
 
 def _set_cross_language(driver, enabled: bool) -> Optional[bool]:
-    """设置检索控制区的中英文扩展。返回实际生效值；找不到控件返回 None。"""
+    """设置检索控制区的“中英文扩展”。返回实际生效值；找不到控件返回 None。
+
+    真实 DOM（2026-10 高级/专业检索页）：
+      <label><input type="checkbox" data-id="EN" name="onlyChecked" value="1">中英文扩展</label>
+      <label><input type="checkbox" data-id="TY" name="onlyChecked" value="2">同义词扩展</label>
+    一框式检索页没有该控件，因此简单检索模式下本参数无法生效。
+    """
     try:
         script = r"""
         var want = arguments[0];
-        var labels = document.querySelectorAll('label, span, div');
-        for (var i = 0; i < labels.length; i++) {
-            var el = labels[i];
-            var text = (el.textContent || '').trim();
-            if (text.length > 40 || text.indexOf('中英文扩展') === -1) continue;
-            var box = el.querySelector('input[type="checkbox"]');
-            if (!box && el.previousElementSibling &&
-                el.previousElementSibling.type === 'checkbox') {
-                box = el.previousElementSibling;
+        var box = document.querySelector('input[type="checkbox"][data-id="EN"]')
+               || document.querySelector('input[type="checkbox"][name="onlyChecked"][value="1"]');
+        if (!box) {
+            var labels = document.querySelectorAll('label');
+            for (var i = 0; i < labels.length; i++) {
+                var el = labels[i];
+                if ((el.textContent || '').trim() !== '中英文扩展') continue;
+                box = el.querySelector('input[type="checkbox"]');
+                if (box) break;
             }
-            if (!box) {
-                var parent = el.parentElement;
-                if (parent) box = parent.querySelector('input[type="checkbox"]');
-            }
-            if (!box) continue;
-            var before = box.checked;
-            if (before !== want) box.click();
-            return JSON.stringify({found: true, before: before, after: box.checked});
         }
-        return JSON.stringify({found: false});
+        if (!box) return JSON.stringify({found: false});
+        var before = box.checked;
+        if (before !== want) box.click();
+        return JSON.stringify({found: true, before: before, after: box.checked});
         """
         raw = driver.execute_script(script, bool(enabled))
         info = json.loads(raw) if raw else {}
         if not info.get("found"):
-            _log("[cnki] 未找到中英文扩展控件，保持知网默认")
+            _log("[cnki] 当前页面没有中英文扩展控件（仅高级/专业检索页提供），保持知网默认")
             return None
         _log(f"[cnki] 中英文扩展: {info.get('before')} -> {info.get('after')}")
         return bool(info.get("after"))
