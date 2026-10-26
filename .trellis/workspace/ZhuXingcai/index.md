@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 1
-- **Last Active**: 2026-08-23
+- **Total Sessions**: 2
+- **Last Active**: 2026-10-27
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~41 | Active |
+| `journal-1.md` | ~85 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 2 | 2026-10-27 | 知网高级检索能力注入与条件可靠性 | `718be45`, `796dde9`, `7d49c03` | `feature/cnki-advanced-retrieval` |
 | 1 | 2026-08-23 | 初始化 HumLit 跨设备开发与端到端基线 | `f241051`, `c2cf0d3` | `main` |
 <!-- @@@/auto:session-history -->
 
