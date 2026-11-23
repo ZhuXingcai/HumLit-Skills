@@ -182,16 +182,35 @@ def _extract_docx_auxiliary_text(filepath: Path) -> tuple:
     return sections, observability
 
 
-def cmd_read_paper(args):
-    """读取用户论文文件（.docx / .txt / .md），输出 UTF-8 纯文本"""
-    filepath = Path(args.filepath)
+def extract_fulltext_from_pdf_file(filepath: Path) -> str:
+    """使用 pypdf 提取本地 PDF 的文本层（带页码标记，仅代表可提取文本层）。"""
+    from pypdf import PdfReader
+
+    reader = PdfReader(str(filepath))
+    pages_out: List[str] = []
+    for idx, page in enumerate(reader.pages, start=1):
+        txt = (page.extract_text() or "").strip()
+        if txt:
+            pages_out.append(f"--- Page {idx} ---\n{txt}")
+    return "\n\n".join(pages_out)
+
+
+def read_paper_payload(
+    filepath_str: str,
+    *,
+    numbered: bool = False,
+    toc: bool = False,
+    section: Optional[str] = None,
+    max_chars: Optional[int] = None,
+) -> Dict[str, Any]:
+    """读取论文文件（.docx / .txt / .md / .tex / .pdf），支持锚点编号、目录提取与章节切片。"""
+    filepath = Path(filepath_str)
     if not filepath.exists():
-        _output({"status": "error", "code": "FILE_NOT_FOUND", "message": f"文件不存在: {args.filepath}"})
-        return
+        return {"status": "error", "code": "FILE_NOT_FOUND", "message": f"文件不存在: {filepath_str}"}
 
     suffix = filepath.suffix.lower()
     text = ""
-    observability = {
+    observability: Dict[str, Any] = {
         "observed_parts": ["plain_text"],
         "unobserved_parts": [],
     }
@@ -200,28 +219,28 @@ def cmd_read_paper(args):
         try:
             from docx import Document
         except ImportError:
-            _output({"status": "error", "code": "MISSING_DEPENDENCY",
-                     "message": "缺少 python-docx 依赖"})
-            return
+            return {"status": "error", "code": "MISSING_DEPENDENCY", "message": "缺少 python-docx 依赖"}
         try:
             doc = Document(str(filepath))
             parts: List[str] = []
+            p_idx = 0
             for p in doc.paragraphs:
                 if p.text.strip():
-                    parts.append(p.text)
-            for table in doc.tables:
-                for row in table.rows:
+                    p_idx += 1
+                    parts.append(f"[P{p_idx}] {p.text}" if numbered else p.text)
+            for t_idx, table in enumerate(doc.tables, start=1):
+                for r_idx, row in enumerate(table.rows, start=1):
                     row_texts = [cell.text.strip() for cell in row.cells if cell.text.strip()]
                     if row_texts:
-                        parts.append(" | ".join(row_texts))
+                        joined = " | ".join(row_texts)
+                        parts.append(f"[T{t_idx}R{r_idx}] {joined}" if numbered else joined)
             auxiliary, observability = _extract_docx_auxiliary_text(filepath)
             parts.extend(auxiliary)
             text = "\n\n".join(parts)
         except Exception as e:
-            _output({"status": "error", "code": "DOCX_PARSE_FAILED", "message": f"docx 解析失败: {e}"})
-            return
+            return {"status": "error", "code": "DOCX_PARSE_FAILED", "message": f"docx 解析失败: {e}"}
 
-    elif suffix in (".txt", ".md", ".markdown"):
+    elif suffix in (".txt", ".md", ".markdown", ".tex"):
         decoded = False
         for enc in ("utf-8", "utf-8-sig", "gbk", "gb2312", "gb18030"):
             try:
@@ -231,39 +250,85 @@ def cmd_read_paper(args):
             except (UnicodeDecodeError, LookupError):
                 continue
         if not decoded:
-            _output({"status": "error", "code": "ENCODING_ERROR", "message": "无法识别文件编码"})
-            return
+            return {"status": "error", "code": "ENCODING_ERROR", "message": "无法识别文件编码"}
+        if numbered:
+            raw_paras = [blk.strip() for blk in re.split(r"\n\s*\n", text) if blk.strip()]
+            text = "\n\n".join(f"[P{i}] {blk}" for i, blk in enumerate(raw_paras, start=1))
 
     elif suffix == ".pdf":
-        _output({"status": "error", "code": "UNSUPPORTED_FORMAT",
-                 "message": "PDF 请使用 Agent 内置的文件读取工具直接读取，无需 read-paper"})
-        return
+        try:
+            text = extract_fulltext_from_pdf_file(filepath)
+            observability = {
+                "observed_parts": ["pdf_text_layer"],
+                "unobserved_parts": ["scanned_images_without_ocr", "figures_and_layout"],
+            }
+        except ImportError:
+            return {"status": "error", "code": "MISSING_DEPENDENCY", "message": "缺少 pypdf 依赖"}
+        except Exception as e:
+            return {"status": "error", "code": "PDF_PARSE_FAILED", "message": f"PDF 解析失败: {e}"}
     else:
-        _output({"status": "error", "code": "UNSUPPORTED_FORMAT",
-                 "message": f"不支持的文件格式: {suffix}"})
+        return {"status": "error", "code": "UNSUPPORTED_FORMAT", "message": f"不支持的文件格式: {suffix}"}
+
+    result: Dict[str, Any] = {
+        "status": "success",
+        "chars": len(text),
+        "paragraphs": text.count("\n\n") + 1 if text else 0,
+        "observability": observability,
+    }
+
+    if toc or section:
+        from core.sections import parse_fulltext_sections, public_toc, slice_fulltext_sections
+
+        sections_list = parse_fulltext_sections(text)
+        result["toc"] = public_toc(sections_list)
+        if toc and not section:
+            result["text"] = ""
+            return result
+        if section:
+            sliced = slice_fulltext_sections(
+                text,
+                section,
+                max_chars=max_chars or 30000,
+            )
+            result["matched_sections"] = sliced.get("matched_sections", [])
+            text = sliced.get("text", "")
+            result["chars"] = len(text)
+            result["paragraphs"] = text.count("\n\n") + 1 if text else 0
+
+    if max_chars and max_chars > 0 and len(text) > max_chars:
+        text = text[:max_chars]
+        result["truncated"] = True
+        result["chars"] = len(text)
+
+    result["text"] = text
+    return result
+
+
+def cmd_read_paper(args):
+    """读取用户论文文件（.docx / .txt / .md / .tex / .pdf），支持锚点、目录与章节切片"""
+    payload = read_paper_payload(
+        args.filepath,
+        numbered=bool(getattr(args, "numbered", False)),
+        toc=bool(getattr(args, "toc", False)),
+        section=getattr(args, "section", None),
+        max_chars=getattr(args, "max_chars", None),
+    )
+    if payload.get("status") != "success":
+        _output(payload)
         return
 
-    char_count = len(text)
-    para_count = text.count("\n\n") + 1 if text else 0
-
+    text = payload.get("text", "")
     if args.output:
         out_path = Path(args.output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(text, encoding="utf-8")
-        _output({"status": "success",
-                 "message": f"已提取到: {args.output}",
-                 "chars": char_count,
-                 "paragraphs": para_count,
-                 "observability": observability})
+        out = {k: v for k, v in payload.items() if k != "text"}
+        out["message"] = f"已提取到: {args.output}"
+        _output(out)
+    elif args.raw:
+        print(text)
     else:
-        if args.raw:
-            print(text)
-        else:
-            _output({"status": "success",
-                     "chars": char_count,
-                     "paragraphs": para_count,
-                     "observability": observability,
-                     "text": text})
+        _output(payload)
 
 
 def cmd_pdf_meta(args):
@@ -486,8 +551,12 @@ def cmd_patch_docx(args):
 
 def add_parser(sub):
     # read-paper
-    p_paper = sub.add_parser("read-paper", help="读取论文文件（.docx/.txt/.md）并输出 UTF-8 文本")
+    p_paper = sub.add_parser("read-paper", help="读取论文文件（.docx/.txt/.md/.tex/.pdf），支持锚点、目录与章节切片")
     p_paper.add_argument("filepath", help="论文文件路径")
+    p_paper.add_argument("--numbered", action="store_true", help="输出带 [P1] / [T1R1] 段落锚点编号的文本")
+    p_paper.add_argument("--toc", action="store_true", help="提取文档章节目录、页码与字数概览")
+    p_paper.add_argument("--section", help="按章节标题关键词或 S序号精准切片读取（逗号分隔）")
+    p_paper.add_argument("--max-chars", type=int, help="返回文本最大字符数上限")
     p_paper.add_argument("--output", help="输出到文件（默认直接打印）")
     p_paper.add_argument("--raw", action="store_true", help="输出纯文本而非 JSON")
     p_paper.set_defaults(func=cmd_read_paper)

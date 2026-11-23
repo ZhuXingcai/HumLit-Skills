@@ -18,8 +18,10 @@
 |----------|------|------|
 | Markdown → 学术格式 Word | `write-docx "file.md"` | `docx_tools: false` 时降级输出 Markdown |
 | 在原 .docx 插引用/改写 | `patch-docx "file.docx" --patch patch.json` | 同上 |
-| 读取用户论文 | `read-paper "file"` | — |
+| 读取用户论文 / 长文切片 | `read-paper "file" [--numbered] [--toc] [--section "章节"]` | — |
 | 从 PDF 提元数据 | `pdf-meta "file.pdf"` | `pdf_tools: false` 时用 Agent PDF 工具人工提取 |
+| 实证数据确定性制表 | `data-table data.csv --type summary/corr/regression/comparison --format markdown/latex/docx` | `docx_tools: false` 降级 Markdown/LaTeX |
+| 审稿意见拆解与回复函脚手架 | `rebuttal comments.txt --manuscript draft.docx --init-patch patch.json` | 仅作脚手架，须作者审核定稿 |
 
 **docx_tools: false** → write-docx/patch-docx 不可用，降级输出 Markdown。
 
@@ -27,10 +29,12 @@
 
 | 命令 | 用途 | 关键参数 |
 |------|------|----------|
-| `read-paper "file"` | 读取用户论文（.docx/.txt/.md） | `--output` `--raw` |
+| `read-paper "file"` | 读取论文（.docx/.txt/.md/.tex/.pdf）及目录切片 | `--numbered` `--toc` `--section` `--max-chars` `--output` `--raw` |
 | `pdf-meta "file.pdf"` | 从 PDF 提取元数据（标题、DOI 等） | |
 | `write-docx "file.md"` | Markdown → 学术格式 Word | `--output` |
 | `patch-docx "file.docx"` | 在原 .docx 上打补丁（插入引用/脚注） | `--patch` `--output` |
+| `data-table "file"` | CSV/TSV/JSON → 三线统计/相关/回归/对比表 | `--type` `--columns` `--format` `-o` `--raw` |
+| `rebuttal "file"` | 拆解审稿意见并生成回复函与补丁模板 | `--manuscript` `--format` `-o` `--init-patch` `--raw` |
 
 ## 要点
 

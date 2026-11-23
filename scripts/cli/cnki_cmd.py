@@ -6,16 +6,17 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from cli._common import (
-    _output, _load_session, _save_session, _session_project, _is_cnki_paper,
+    _is_cnki_paper,
+    _load_session,
+    _output,
+    _save_session,
+    _session_project,
 )
 from core.paths import state_path
 
 
 def _parse_indices(raw: str, total: int) -> List[int]:
-    """解析用户传入的序号字符串，返回 0-based 索引列表。
-
-    支持格式: "3" "1,3,9" "2-5" "1,3-5,8" （序号从 1 开始）
-    """
+    """解析用户传入的序号字符串，返回 0-based 索引列表。"""
     indices: List[int] = []
     for part in raw.split(","):
         part = part.strip()
@@ -57,15 +58,18 @@ def cmd_auth_cnki(args):
 
 
 def cmd_read_detail(args):
-    """对会话中的论文批量获取摘要/全文"""
+    """对会话中的论文批量获取摘要/全文（支持本地 PDF 离线提取、硕博 --toc 与 --section 章节切片）"""
     from core.cnki import batch_read_detail
     papers = _load_session(_session_project(args))
     if not papers:
         _output({"status": "error", "code": "NO_SESSION_DATA",
-                 "message": "没有可读取的论文，请先执行 search、batch-search 或 import"})
+                 "message": "没有可读取的论文，请先执行 search、batch-search、import 或 zotero"})
         return
 
-    do_fulltext = args.fulltext
+    do_toc = bool(getattr(args, "toc", False))
+    do_section = getattr(args, "section", None)
+    max_chars = getattr(args, "max_chars", None)
+    do_fulltext = bool(args.fulltext or do_toc or do_section)
     indices_raw = getattr(args, "indices", None)
 
     if indices_raw:
@@ -84,18 +88,42 @@ def cmd_read_detail(args):
     print(f"[read-detail] 会话共 {len(papers)} 篇，将获取{label}的{'全文' if do_fulltext else '摘要'}",
           file=sys.stderr)
 
-    cnki_selected = [p for p in selected if _is_cnki_paper(p)]
-    non_cnki_selected = [p for p in selected if not _is_cnki_paper(p)]
-    if not cnki_selected:
+    local_pdf_selected = [
+        p for p in selected
+        if p.get("local_pdf") and Path(str(p["local_pdf"])).is_file()
+    ]
+    local_pdf_ids = {id(p) for p in local_pdf_selected}
+    cnki_selected = [p for p in selected if id(p) not in local_pdf_ids and _is_cnki_paper(p)]
+    non_cnki_selected = [p for p in selected if id(p) not in local_pdf_ids and not _is_cnki_paper(p)]
+
+    enriched: List[Dict[str, Any]] = []
+    if local_pdf_selected:
+        from cli.docx_cmd import extract_fulltext_from_pdf_file
+        for p in local_pdf_selected:
+            item = dict(p)
+            if do_fulltext:
+                try:
+                    ft = extract_fulltext_from_pdf_file(Path(str(p["local_pdf"])))
+                    item["fulltext"] = ft
+                    item["has_fulltext"] = bool(ft)
+                    item["fulltext_length"] = len(ft)
+                except Exception as exc:
+                    item["fulltext_error"] = str(exc)
+            enriched.append(item)
+
+    if cnki_selected:
+        enriched.extend(
+            batch_read_detail(
+                papers=cnki_selected,
+                top_n=len(cnki_selected),
+                fulltext=do_fulltext,
+            )
+        )
+    elif not local_pdf_selected:
         _output({"status": "warning", "code": "NO_SESSION_DATA",
-                 "message": "所选论文中无知网论文，read-detail 仅支持知网论文。API 源论文请直接使用搜索时返回的摘要",
+                 "message": "所选论文中无知网论文或本地 PDF 附件。API 源论文请直接使用搜索时返回的摘要",
                  "count": len(non_cnki_selected), "results": non_cnki_selected})
         return
-    enriched = batch_read_detail(
-        papers=cnki_selected,
-        top_n=len(cnki_selected),
-        fulltext=do_fulltext,
-    )
     enriched.extend(non_cnki_selected)
 
     if indices_raw:
@@ -149,6 +177,23 @@ def cmd_read_detail(args):
             except Exception:
                 entry["fulltext"] = ""
 
+        if do_fulltext:
+            ft_text = entry.get("fulltext", "")
+            if ft_text and (do_toc or do_section):
+                from core.sections import parse_fulltext_sections, public_toc, slice_fulltext_sections
+
+                secs = parse_fulltext_sections(ft_text)
+                entry["toc"] = public_toc(secs)
+                if do_toc and not do_section:
+                    entry.pop("fulltext", None)
+                elif do_section:
+                    sliced = slice_fulltext_sections(ft_text, do_section, max_chars=max_chars or 30000)
+                    entry["matched_sections"] = sliced.get("matched_sections", [])
+                    entry["fulltext"] = sliced.get("text", "")
+            elif max_chars and max_chars > 0 and len(ft_text) > max_chars:
+                entry["fulltext"] = ft_text[:max_chars]
+                entry["truncated"] = True
+
         results.append(entry)
 
     _output({"status": "success", "count": len(results), "results": results})
@@ -189,12 +234,18 @@ def add_parser(sub):
     p_auth.set_defaults(func=cmd_auth_cnki)
 
     # read-detail
-    p_read = sub.add_parser("read-detail", help="批量获取论文摘要/全文（需先搜索）")
+    p_read = sub.add_parser("read-detail", help="批量获取论文摘要/全文（支持本地 PDF、硕博目录与章节切片）")
     p_read.add_argument("--top-n", type=int, default=5,
                         help="获取前 N 篇论文的详情（默认 5）")
     p_read.add_argument("--indices", type=str, default=None,
                         help="指定论文序号（从1开始），如 '3' '1,3,9' '2-5'。指定后忽略 --top-n")
     p_read.add_argument("--fulltext", action="store_true",
-                        help="抓取 HTML 全文（默认只抓摘要）")
+                        help="抓取全文（指定 --toc 或 --section 时自动启用）")
+    p_read.add_argument("--toc", action="store_true",
+                        help="仅返回全文目录结构与各章节页码/字数（适合硕博长文）")
+    p_read.add_argument("--section", type=str, default=None,
+                        help="按章节标题关键词或 S序号精准切片精读（如 '研究设计,实证分析'）")
+    p_read.add_argument("--max-chars", type=int, default=None,
+                        help="单篇返回正文最大字符数上限")
     p_read.add_argument("--project", help="课题文献库名称")
     p_read.set_defaults(func=cmd_read_detail)

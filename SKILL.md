@@ -43,8 +43,8 @@ metadata:
 | `search` | 学术文献检索、研究趋势或引文追踪 | 通用网页、新闻、天气或代码文档搜索 | `search`<br>`batch-search`<br>`citations`<br>`trends` | `static/fragments/task/search.md` |
 | `download` | OA 或合法 CNKI 全文、详情与下载 | 绕过付费墙、验证码或机构认证 | `download`<br>`batch-download`<br>`detail`<br>`auth-cnki`<br>`read-detail` | `static/fragments/task/download.md` |
 | `review-write` | 课题库、综述证据、选题假设与证据校验 | 不核对原文的出版级综述或研究空白结论 | `projects`<br>`library`<br>`review`<br>`write`<br>`validate`<br>`topics` | `static/fragments/task/review-write.md` |
-| `citation` | 参考文献、BibTeX、RIS 与题录导入导出 | 凭记忆补造缺失书目信息 | `cite`<br>`export`<br>`import` | `static/fragments/task/citation.md` |
-| `docx` | 学术 Word、论文读取、PDF 元数据与文档补丁 | 合同、通知、简历等普通办公文档 | `read-paper`<br>`pdf-meta`<br>`write-docx`<br>`patch-docx` | `static/fragments/task/docx.md` |
+| `citation` | 参考文献、BibTeX、RIS、本机 Zotero 与题录导入导出 | 凭记忆补造缺失书目信息 | `cite`<br>`export`<br>`import`<br>`zotero` | `static/fragments/task/citation.md` |
+| `docx` | 学术 Word、长文切片、实证制表、审稿返修与文档补丁 | 合同、通知、简历等普通办公文档 | `read-paper`<br>`pdf-meta`<br>`write-docx`<br>`patch-docx`<br>`data-table`<br>`rebuttal` | `static/fragments/task/docx.md` |
 | `format` | 论文格式 profile、检查与套用 | 捏造学校或期刊未提供的格式要求 | `format-profile`<br>`format-check`<br>`format-apply` | `static/fragments/task/format.md` |
 | `blind-review` | 有边界的模拟盲审与送审信号 | 官方盲审、答辩或学术不端结论 | `review-rubric`<br>`review-signals` | `static/fragments/task/blind-review.md` |
 | `source-citation` | 古籍、档案、方志、碑刻、报刊等史料引用 | 推断用户未提供的版本、卷次或档号 | `cite-source-template`<br>`cite-source` | `static/fragments/task/source-citation.md` |

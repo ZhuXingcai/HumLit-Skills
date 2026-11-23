@@ -17,8 +17,9 @@
 | 用户意图 | 命令 |
 |----------|------|
 | 导入题录 | `import "file"`（NoteExpress/Refworks/BibTeX） |
-| 导出 | `export --format bibtex/ris/markdown/json/excel/gbt7714/footnote/apa/mla/chicago` |
-| 生成引用 | `cite --style gbt7714/gb/footnote/apa/mla/chicago` |
+| 只读读取本机 Zotero | `zotero [词] [--collection 集合] --save --project <课题>` |
+| 导出 | `export --format bibtex/ris/markdown/json/excel/gbt7714/gbt7714-author-year/chinese-econ/footnote/apa/mla/chicago` |
+| 生成引用与角标重排 | `cite --style gbt7714/gbt7714-author-year/chinese-econ/footnote/apa/mla/chicago [--from-file draft.md --rewrite-output final.md --bibtex-output refs.bib --in-text]` |
 
 题录导入、现有元数据格式化与导出不依赖知网；但 `cite` 遇到缺卷期页码且带 CNKI URL 的记录时会尝试详情页补全。CNKI 不可用时仍可对已有字段生成引用，但必须保留缺失项，不能声称元数据完整。
 
@@ -26,9 +27,10 @@
 
 | 命令 | 用途 | 关键参数 |
 |------|------|----------|
-| `export` | 导出文献列表 | `--format` `--output` `--raw` `--project` |
-| `cite` | 生成引用 | `--style`（gbt7714/gb/footnote/apa/mla/chicago） `--raw` `--project` |
-| `import "file"` | 导入知网导出的题录文件 | NoteExpress/Refworks/BibTeX |
+| `export` | 导出文献列表 | `--format` `--indices` `--output` `--raw` `--project` |
+| `cite` | 生成引用与正文角标重排 | `--style` `--indices` `--from-file` `--rewrite-output` `--bibtex-output` `--in-text` `--no-enrich` `--raw` `--project` |
+| `import "file"` | 导入知网导出的题录文件 | NoteExpress/Refworks/BibTeX `--append` `--project` |
+| `zotero [query]` | 只读快照读取本机 Zotero（绝不写回、不锁库） | `--collection` `--data-dir` `--list-collections` `--save` `--append` `--project` |
 
 ## 要点
 

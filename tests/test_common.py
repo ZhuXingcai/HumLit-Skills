@@ -17,7 +17,18 @@ def test_safe_project_name_sanitizes():
 
 
 def test_citation_style_choices_complete():
-    assert _common.CITATION_STYLE_CHOICES == ["gbt7714", "gb", "apa", "mla", "chicago", "footnote"]
+    assert _common.CITATION_STYLE_CHOICES == [
+        "gbt7714",
+        "gb",
+        "gbt7714-author-year",
+        "author-year",
+        "chinese-econ",
+        "econ",
+        "apa",
+        "mla",
+        "chicago",
+        "footnote",
+    ]
 
 
 def test_emit_outputs_json(capsys):

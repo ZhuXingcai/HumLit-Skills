@@ -34,19 +34,19 @@ routing: {
     "references": ["references/workflows.md", "references/workflows/retrieval-and-writing.md", "references/workflows/revision-and-analysis.md", "references/error-codes.md"]
   },
   "citation": {
-    "triggers": ["参考文献、BibTeX、RIS 与题录导入导出"],
+    "triggers": ["参考文献、BibTeX、RIS、本机 Zotero 与题录导入导出"],
     "exclusions": ["凭记忆补造缺失书目信息"],
     "fragment": "static/fragments/task/citation.md",
-    "commands": ["cite", "export", "import"],
+    "commands": ["cite", "export", "import", "zotero"],
     "capabilities": ["bibliography"],
     "references": ["references/workflows.md", "references/workflows/retrieval-and-writing.md", "references/error-codes.md"]
   },
   "docx": {
-    "triggers": ["学术 Word、论文读取、PDF 元数据与文档补丁"],
+    "triggers": ["学术 Word、长文切片、实证制表、审稿返修与文档补丁"],
     "exclusions": ["合同、通知、简历等普通办公文档"],
     "fragment": "static/fragments/task/docx.md",
-    "commands": ["read-paper", "pdf-meta", "write-docx", "patch-docx"],
-    "capabilities": ["document_io"],
+    "commands": ["read-paper", "pdf-meta", "write-docx", "patch-docx", "data-table", "rebuttal"],
+    "capabilities": ["document_io", "empirical_tables", "peer_review_rebuttal"],
     "references": ["references/workflows.md", "references/workflows/retrieval-and-writing.md", "references/workflows/revision-and-analysis.md", "references/environment.md", "references/error-codes.md"]
   },
   "format": {

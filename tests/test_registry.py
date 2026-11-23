@@ -13,8 +13,9 @@ EXPECTED_COMMANDS = {
     "download", "batch-download",
     "detail", "auth-cnki", "read-detail",
     "review", "write", "validate", "topics", "projects", "library",
-    "cite", "export", "import",
+    "cite", "export", "import", "zotero",
     "write-docx", "patch-docx", "read-paper", "pdf-meta",
+    "data-table", "rebuttal",
     "check", "clean-cache", "workflows",
     "format-profile", "format-check", "format-apply",
     "review-rubric", "review-signals",
@@ -28,7 +29,7 @@ EXPECTED_COMMANDS = {
 
 def test_all_commands_registered():
     assert set(COMMANDS.keys()) == EXPECTED_COMMANDS
-    assert len(COMMANDS) == 39
+    assert len(COMMANDS) == 42
 
 
 def test_modules_for_dedupes():

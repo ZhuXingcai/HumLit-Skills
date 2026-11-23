@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Local Library, Long-Document Slicing, Offline Venue Screening & Writing Tools
+
+- Add `zotero` command (`scripts/core/zotero.py`): zero-dependency read-only SQLite snapshot reader (never locks a running Zotero client, never writes back) with collection filtering and local PDF attachment mapping into `.humlit` project sessions.
+- Add long-document TOC & chapter slicing (`scripts/core/sections.py`): `read-paper` gains `--numbered`, `--toc`, `--section`, `--max-chars`, and PDF text-layer extraction (with explicit `observability` boundaries); `read-detail` gains `--toc`, `--section`, `--max-chars`, and offline local PDF extraction.
+- Add offline international core & CAS Early Warning screening (`scripts/core/venues.py` + `scripts/core/data/venue_index.json.gz`, 30,300+ ISSN): `search` supports `--exclude-warning` and international `--core` tokens (`SCI`, `SSCI`, `AHCI`, `ESCI`, `CCF-A/B/C`); `journal-check` supports optional `--journal-name` offline index signals.
+- Upgrade `cite` and `export` (`scripts/core/formatter.py`): add `gbt7714-author-year`, `chinese-econ`, pure-ASCII BibTeX citekeys, `--indices`, `--from-file`, `--rewrite-output`, `--bibtex-output`, and `--in-text`.
+- Add `data-table` and `rebuttal` commands (`scripts/core/research_tools.py`, `scripts/cli/research_cmd.py`): deterministic summary/correlation/regression/comparison tables (Markdown, LaTeX `booktabs`, Word three-line `.docx`) and structured peer-review comment parsing with manuscript `[Pn]` anchor linking and `patch-docx` templates.
+
 ### CNKI Advanced Retrieval
 
 - Add `--condition` (repeatable, up to 10), `--professional`, `--match` and

@@ -101,6 +101,19 @@ def cmd_journal_check(args):
 
     report = JF.check_journal_fit(text or "", model, profile)
     out = {"status": "success", "profile": profile.get("name"), "file": args.filepath, **report}
+    target_journal = getattr(args, "journal_name", None) or profile.get("name")
+    if target_journal:
+        from core.venues import annotate_venue_quality
+        probe = annotate_venue_quality({"journal": str(target_journal)})
+        out["venue_index_signals"] = {
+            "query_journal": str(target_journal),
+            "venue_tags": probe.get("venue_tags", []),
+            "core_type": probe.get("core_type"),
+            "is_warning": bool(probe.get("is_warning", False)),
+            "warning_reason": probe.get("warning_reason"),
+            "warning_history": probe.get("warning_history"),
+            "boundary_note": "离线索引匹配仅作投稿前风险提示，不构成期刊质量或录用决定。",
+        }
 
     if args.raw:
         m = report["metrics"]
@@ -135,5 +148,6 @@ def add_parser(sub):
     p_chk = sub.add_parser("journal-check", help="投稿前适配自查（篇幅/摘要/关键词 + 匿名泄露）")
     p_chk.add_argument("filepath", help="稿件文件（.docx/.md/.txt）")
     p_chk.add_argument("--profile", help="期刊投稿要求 profile JSON（缺省用内置默认）")
+    p_chk.add_argument("--journal-name", help="可选：目标国际期刊名称，用于离线核查 SSCI/AHCI/SCI/CCF 与中科院预警状态")
     p_chk.add_argument("--raw", action="store_true", help="输出纯文本而非 JSON")
     p_chk.set_defaults(func=cmd_journal_check)

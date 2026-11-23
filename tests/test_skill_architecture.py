@@ -19,8 +19,8 @@ def test_repository_skill_architecture_is_consistent():
 
     assert report.errors == ()
     assert report.stats["tasks"] == 13
-    assert report.stats["commands"] == 39
-    assert report.stats["capabilities"] == 17
+    assert report.stats["commands"] == 42
+    assert report.stats["capabilities"] == 19
     assert report.stats["routing_cases"] == 48
     assert report.stats["positive_cases"] == 24
     assert report.stats["negative_cases"] == 12

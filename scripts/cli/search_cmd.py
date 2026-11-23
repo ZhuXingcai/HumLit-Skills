@@ -364,12 +364,29 @@ def cmd_search(args):
 
         # 使用改进的去重函数（基于 DOI 和标题）
         from core.search import deduplicate_results, calculate_retrieval_priority_score
+        from core.venues import (
+            annotate_venue_quality,
+            matches_international_core,
+            parse_international_core_tokens,
+        )
         deduped = deduplicate_results(results)
 
-        # 检索优先级只衡量元数据完整性、影响力线索与获取便利性，不评价学术质量。
+        intl_core_tokens = parse_international_core_tokens(getattr(args, "core", None))
+        exclude_warning = bool(getattr(args, "exclude_warning", False))
+        filtered_deduped = []
+        warning_excluded = 0
         for paper in deduped:
+            annotate_venue_quality(paper)
+            if exclude_warning and paper.get("is_warning"):
+                warning_excluded += 1
+                continue
+            if intl_core_tokens and not _is_cnki_paper(paper):
+                if not matches_international_core(paper, intl_core_tokens):
+                    continue
             score = calculate_retrieval_priority_score(paper)
             paper["retrieval_priority_score"] = score
+            filtered_deduped.append(paper)
+        deduped = filtered_deduped
 
         if args.sort == "citations":
             deduped.sort(key=lambda x: x.get("cited_by", 0), reverse=True)
@@ -678,7 +695,9 @@ def add_parser(sub):
                           help="数据源: cnki/openalex/semantic/arxiv/nssd/dblp/api/all；base 为实验入口 (默认 cnki)")
     p_search.add_argument("--limit", type=int, default=None, help="结果数量限制（默认 20，多页时自动扩展）")
     p_search.add_argument("--core",
-                          help="知网侧边栏来源类别，逗号分隔: 北大核心,CSSCI,AMI,WJCI,CSCD,EI")
+                          help="核心/索引筛选（逗号分隔）：知网支持 北大核心,CSSCI,AMI,WJCI,CSCD,EI；英文源支持 SCI,SSCI,AHCI,ESCI,CCF,CCF-A,CCF-B,CCF-C")
+    p_search.add_argument("--exclude-warning", action="store_true",
+                          help="按离线索引剔除中科院《国际期刊预警名单》在榜期刊（仅作筛选信号）")
     p_search.add_argument("--doc-type",
                           choices=["journal", "master", "doctor", "thesis",
                                    "conference", "newspaper"],

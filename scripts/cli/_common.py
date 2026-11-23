@@ -14,7 +14,12 @@ from core.paths import state_path
 
 __version__ = "1.0.2"
 
-CITATION_STYLE_CHOICES = ["gbt7714", "gb", "apa", "mla", "chicago", "footnote"]
+CITATION_STYLE_CHOICES = [
+    "gbt7714", "gb",
+    "gbt7714-author-year", "author-year",
+    "chinese-econ", "econ",
+    "apa", "mla", "chicago", "footnote",
+]
 SESSION_SCHEMA_VERSION = 1
 
 
